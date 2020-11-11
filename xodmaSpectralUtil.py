@@ -27,12 +27,23 @@ import scipy as sp
 import six
 
 
+# // *---------------------------------------------------------------------* //
+
+# Directory Structure:
+# root folder:  ../
+# util folder:  ../xodUtil/
+# DSP folder:   ../xodDSP/
+# Audio folder: ../xodAudio/
+# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
+# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
+# sub-folder:   ../xodAudio/audio/wavsrc/
+# sub-folder:   ../xodAudio/audio/test/
+
 rootDir = '../../'
-sys.path.insert(0, rootDir+'audio/xodma/')
+sys.path.insert(0, rootDir+'xodAudio/xodma/')
 
 import cache
 from xodmaParameterError import ParameterError
-#from xodmaAudioTools import valid_audio
 
 
 # temp python debugger - use >>>pdb.set_trace() to set break

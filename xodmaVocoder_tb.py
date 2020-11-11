@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
-# header begin-----------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 #
@@ -17,7 +16,6 @@
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
-# header end-------------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
@@ -27,15 +25,26 @@ import numpy as np
 #import scipy as sp
 import matplotlib.pyplot as plt
 
+# // *---------------------------------------------------------------------* //
+
+# Directory Structure:
+# root folder:  ../
+# util folder:  ../xodUtil/
+# DSP folder:   ../xodDSP/
+# Audio folder: ../xodAudio/
+# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
+# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
+# sub-folder:   ../xodAudio/audio/wavsrc/
+# sub-folder:   ../xodAudio/audio/test/
+
 
 rootDir = '../../'
-
-audioSrcDir = rootDir+'audio/wavsrc/'
-audioOutDir = rootDir+'audio/test/'
-
+audioSrcDir = rootDir+'xodAudio/audio/wavsrc/'
+audioOutDir = rootDir+'xodAudio/audio/test/'
 
 
-sys.path.insert(0, rootDir+'audio/xodma')
+
+sys.path.insert(0, rootDir+'xodAudio/xodma')
 
 from xodmaAudioTools import load_wav, write_wav, valid_audio, resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
@@ -45,14 +54,11 @@ from xodmaVocoder import pvTimeStretch, pvPitchShift
 from xodmaSpectralUtil import frames_to_time
 from xodmaSpectralPlot import specshow
 
-#sys.path.insert(0, 'C:/odmkDev/odmkCode/odmkPython/util')
-sys.path.insert(1, rootDir+'util')
+
+sys.path.insert(1, rootDir+'xodUtil')
 import xodPlotUtil as xodplt
 
-
-
-#sys.path.insert(1, 'C:/odmkDev/odmkCode/odmkPython/DSP')
-sys.path.insert(2, rootDir+'DSP')
+sys.path.insert(2, rootDir+'xodDSP')
 import xodClocks as clks
 
 

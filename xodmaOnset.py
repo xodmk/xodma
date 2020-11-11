@@ -23,9 +23,21 @@ import numpy as np
 import scipy
 
 
-rootDir = '../'
+# // *---------------------------------------------------------------------* //
 
-sys.path.insert(0, rootDir+'audio/xodma')
+# Directory Structure:
+# root folder:  ../
+# util folder:  ../xodUtil/
+# DSP folder:   ../xodDSP/
+# Audio folder: ../xodAudio/
+# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
+# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
+# sub-folder:   ../xodAudio/audio/wavsrc/
+# sub-folder:   ../xodAudio/audio/test/
+
+rootDir = '../../'
+
+sys.path.insert(0, rootDir+'xodAudio/xodma')
 from xodmaSpectralUtil import frames_to_samples, frames_to_time
 from xodmaMiscUtil import fix_frames, match_events, sync
 from xodmaSpectralTools import peak_pick, power_to_db
