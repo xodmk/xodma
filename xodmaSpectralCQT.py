@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header begin-----------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 #
@@ -12,6 +13,7 @@
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header end-------------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
@@ -19,26 +21,15 @@
 from __future__ import division
 
 from warnings import warn
+
+
 import sys
 import numpy as np
 import scipy.fftpack as fft
 
 
-# // *---------------------------------------------------------------------* //
-
-# Directory Structure:
-# root folder:  ../
-# util folder:  ../xodUtil/
-# DSP folder:   ../xodDSP/
-# Audio folder: ../xodAudio/
-# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
-# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
-# sub-folder:   ../xodAudio/audio/wavsrc/
-# sub-folder:   ../xodAudio/audio/test/
-
-
-rootDir = '../../'
-sys.path.insert(0, rootDir+'xodAudio/xodma')
+rootDir = '../'
+sys.path.insert(0, rootDir+'audio/xodma')
 
 import cache
 from xodmaSpectralUtil import note_to_hz, cqt_frequencies, window_bandwidth

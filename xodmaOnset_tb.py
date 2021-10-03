@@ -12,6 +12,7 @@
 #
 # XODMK Phase Vocoder Spectral Mutator EFFX
 #
+# Using Librosa vocoder implementation for model
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
@@ -23,32 +24,22 @@ import sys
 import numpy as np
 #import scipy as sp
 import soundfile as sf
+#import librosa
+#import librosa.display
 import matplotlib.pyplot as plt
 
 
-# // *---------------------------------------------------------------------* //
-
-# Directory Structure:
-# root folder:  ../
-# util folder:  ../xodUtil/
-# DSP folder:   ../xodDSP/
-# Audio folder: ../xodAudio/
-# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
-# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
-# sub-folder:   ../xodAudio/audio/wavsrc/
-# sub-folder:   ../xodAudio/audio/test/
-
-
-rootDir = '../../'
-audioSrcDir = '../xodAudio/audio/wavsrc/'
-audioOutDir = '../xodAudio/audio/test/'
+# rootDir = '../'
+rootDir = 'C:/XODMK/xodmkCode/xodmkPython/'
+audioSrcDir = '../audio/wavsrc/'
+audioOutDir = '../audio/test/'
 
 
 #sys.path.insert(0, 'C:/odmkDev/odmkCode/odmkPython/util')
-sys.path.insert(0, rootDir+'xodUtil')
+sys.path.insert(0, rootDir+'util')
 import xodPlotUtil as xodplt
 
-sys.path.insert(1, rootDir+'xodAudio/xodma')
+sys.path.insert(1, rootDir+'audio/xodma')
 from xodmaAudioTools import load_wav, write_wav, resample#, valid_audio
 from xodmaAudioTools import fix_length#, samples_to_time, time_to_samples
 from xodmaOnset import onset_strength
@@ -57,7 +48,7 @@ from xodmaSpectralTools import phase_vocoder, magphase
 from xodmaSpectralUtil import frames_to_time
 from xodmaSpectralPlot import specshow
 
-#sys.path.insert(3, rootDir+'xodDSP')
+#sys.path.insert(3, rootDir+'DSP')
 #import xodClocks as clks
 #import odmkSigGen1 as sigGen
 

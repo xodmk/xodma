@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header begin-----------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 #
@@ -16,6 +17,7 @@
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header end-------------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
@@ -25,26 +27,23 @@ import numpy as np
 #import scipy as sp
 import matplotlib.pyplot as plt
 
-# // *---------------------------------------------------------------------* //
-
-# Directory Structure:
-# root folder:  ../
-# util folder:  ../xodUtil/
-# DSP folder:   ../xodDSP/
-# Audio folder: ../xodAudio/
-# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
-# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
-# sub-folder:   ../xodAudio/audio/wavsrc/
-# sub-folder:   ../xodAudio/audio/test/
+import xodmaSetRootDir as xdir
 
 
-rootDir = '../../'
-audioSrcDir = rootDir+'xodAudio/audio/wavsrc/'
-audioOutDir = rootDir+'xodAudio/audio/test/'
+# temp python debugger - use >>>pdb.set_trace() to set break
+#import pdb
 
 
+# rootDir = '../../'
+#rootDir = 'C:/XODMK/xodmkCode/xodmkPython/'
+#audioSrcDir = rootDir+'audio/wavsrc/'
+#audioOutDir = rootDir+'audio/test/'
 
-sys.path.insert(0, rootDir+'xodAudio/xodma')
+# xdir.rootDir
+# xdir.audioSrcDir
+# xdir.audioOutDir
+
+sys.path.insert(0, xdir.rootDir+'audio/xodma')
 
 from xodmaAudioTools import load_wav, write_wav, valid_audio, resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
@@ -54,16 +53,16 @@ from xodmaVocoder import pvTimeStretch, pvPitchShift
 from xodmaSpectralUtil import frames_to_time
 from xodmaSpectralPlot import specshow
 
-
-sys.path.insert(1, rootDir+'xodUtil')
+#sys.path.insert(0, 'C:/odmkDev/odmkCode/odmkPython/util')
+sys.path.insert(1, xdir.rootDir+'util')
 import xodPlotUtil as xodplt
 
-sys.path.insert(2, rootDir+'xodDSP')
+
+
+#sys.path.insert(1, 'C:/odmkDev/odmkCode/odmkPython/DSP')
+sys.path.insert(2, xdir.rootDir+'DSP')
 import xodClocks as clks
 
-
-# temp python debugger - use >>>pdb.set_trace() to set break
-import pdb
 
 # // *---------------------------------------------------------------------* //
 
@@ -84,7 +83,7 @@ def arrayFromFile(fname):
         fname is the name of existing file in dataInDir (defined above)
         example: newArray = arrayFromFile('mydata_in.dat') '''
         
-    fileSrcFull = audioSrcDir+fname
+    fileSrcFull = xdir.audioSrcDir+fname
         
     datalist = []
     with open(fileSrcFull, mode='r') as infile:
@@ -197,7 +196,7 @@ elif (srcSel==2):
 elif (srcSel==3):
     srcANm = 'multiSinOut48KHz_1K_3K_5K_7K_9K_16sec.wav'
     
-audioSrcA = audioSrcDir+srcANm
+audioSrcA = xdir.audioSrcDir+srcANm
 
 #audioSrcB = audioSrcDir+wavSrcB
 
@@ -294,18 +293,18 @@ if 1:
 
     print('\n// *---:: Write .wav files ::---*')
 
-    outFilePath = audioOutDir+'yOriginal.wav'
+    outFilePath = xdir.audioOutDir+'yOriginal.wav'
     write_wav(outFilePath, aSrc, afs)
 
 
-    outFilePath = audioOutDir+'yRxFast.wav'
+    outFilePath = xdir.audioOutDir+'yRxFast.wav'
     write_wav(outFilePath, yRxFast, afs)
     
     
-    outFilePath = audioOutDir+'ySxSlow.wav'
+    outFilePath = xdir.audioOutDir+'ySxSlow.wav'
     write_wav(outFilePath, ySxSlow, afs)
 
-    print('\n\nOutput directory: '+audioOutDir)
+    print('\n\nOutput directory: '+xdir.audioOutDir)
     print('\nwrote .wav file yOriginal.wav')
     print('\nwrote .wav file yRxFast.wav')
     print('\nwrote .wav file ySxSlow.wav')

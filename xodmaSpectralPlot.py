@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header begin-----------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 #
@@ -12,6 +13,7 @@
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header end-------------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
@@ -42,21 +44,11 @@ from matplotlib.ticker import Formatter, ScalarFormatter
 from matplotlib.ticker import LogLocator, FixedLocator, MaxNLocator
 from matplotlib.ticker import SymmetricalLogLocator
 
-# // *---------------------------------------------------------------------* //
 
-# Directory Structure:
-# root folder:  ../
-# util folder:  ../xodUtil/
-# DSP folder:   ../xodDSP/
-# Audio folder: ../xodAudio/
-# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
-# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
-# sub-folder:   ../xodAudio/audio/wavsrc/
-# sub-folder:   ../xodAudio/audio/test/
 
-rootDir = '../../'
+rootDir = '../'
 
-sys.path.insert(0, rootDir+'xodAudio/xodma')
+sys.path.insert(0, rootDir+'audio/xodma')
 from xodmaSpectralUtil import frame, frames_to_time, tempo_frequencies
 from xodmaSpectralUtil import fft_frequencies, cqt_frequencies, mel_frequencies
 from xodmaSpectralUtil import note_to_hz, hz_to_note, midi_to_note

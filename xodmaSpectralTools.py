@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header begin-----------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 #
@@ -18,6 +19,7 @@
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
+# header end-------------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
@@ -31,20 +33,9 @@ import scipy.signal
 import scipy.interpolate
 import six
 
-# // *---------------------------------------------------------------------* //
-
-# Directory Structure:
-# root folder:  ../
-# util folder:  ../xodUtil/
-# DSP folder:   ../xodDSP/
-# Audio folder: ../xodAudio/
-# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
-# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
-# sub-folder:   ../xodAudio/audio/wavsrc/
-# sub-folder:   ../xodAudio/audio/test/
 
 rootDir = '../../'
-sys.path.insert(0, rootDir+'xodAudio/xodma')
+sys.path.insert(0, rootDir+'audio/xodma')
 
 import cache
 from xodmaSpectralUtil import MAX_MEM_BLOCK, note_to_hz, hz_to_midi, hz_to_octs

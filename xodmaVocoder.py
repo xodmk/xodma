@@ -22,20 +22,9 @@ import sys
 import numpy as np
 import scipy as sp
 
-# // *---------------------------------------------------------------------* //
-
-# Directory Structure:
-# root folder:  ../
-# util folder:  ../xodUtil/
-# DSP folder:   ../xodDSP/
-# Audio folder: ../xodAudio/
-# sub-folder:   ../xodAudio/xodma/          (Git Clone xodma code)
-# sub-folder:   ../xodAudio/xodmaAudioPy/   (project management)
-# sub-folder:   ../xodAudio/audio/wavsrc/
-# sub-folder:   ../xodAudio/audio/test/
 
 rootDir = '../../'
-sys.path.insert(0, rootDir+'xodAudio/xodma')
+sys.path.insert(0, rootDir+'audio/xodma')
 
 
 from xodmaAudioTools import resample
