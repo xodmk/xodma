@@ -20,17 +20,17 @@ import warnings
 import numpy as np
 
 
-rootDir = 'C:\\odmkDev\\odmkCode\\odmkPython\\'
-sys.path.insert(0, rootDir+'audio\\spectralTools')
+
+import xodmaSetRootDir as xdir
+
+sys.path.insert(0, xdir.rootDir+'audio/xodma')
+
+from xodmaMiscUtil import tiny, localmax
+from xodmaSpectralTools import mag_spectrogram
+from xodmaSpectralUtil import hz_to_octs, fft_frequencies
+
 
 import cache
-from odmkMiscUtil import tiny, localmax
-from odmkSpectralUtil import hz_to_octs, fft_frequencies
-from odmkSpectralTools import mag_spectrogram
-
-
-sys.path.insert(1, rootDir+'audio\\audioTools')
-#from odmkAudioTools import valid_audio, resample
 
 
 

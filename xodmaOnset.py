@@ -21,19 +21,22 @@
 import sys
 import numpy as np
 import scipy
+import matplotlib.pyplot as plt
 
 
-rootDir = '../'
+import xodmaSetRootDir as xdir
+sys.path.insert(0, xdir.rootDir+'audio/xodma')
 
-sys.path.insert(0, rootDir+'audio/xodma')
 from xodmaSpectralUtil import frames_to_samples, frames_to_time
 from xodmaMiscUtil import fix_frames, match_events, sync
-from xodmaSpectralTools import peak_pick, power_to_db
+from xodmaSpectralTools import magphase, amplitude_to_db, stft, peak_pick, power_to_db
 from xodmaSpectralFeature import melspectrogram
+from xodmaSpectralPlot import specshow
 from xodmaParameterError import ParameterError
 import cache
 
-
+sys.path.insert(1, xdir.rootDir+'util')
+import xodPlotUtil as xodplt
 
 
 __all__ = ['get_peak_regions',
@@ -57,6 +60,149 @@ def get_peak_regions(peaks, length):
             peak_regions[i] = peaks[i] - peaks[i-1]
             
     return peak_regions
+
+
+
+# // *---------------------------------------------------------------------* //
+
+
+def detectOnset(y, NFFT, fs, peakCtrl=32, plots=2):
+    '''Detect onset events for a time-domain signal
+
+    Parameters
+    ----------
+     <- y        : np.ndarray [shape=(n,)] audio time series
+    
+     -> NFFT     : number of FFT points
+     -> fs       : audio sample rate
+     
+     -* peakCtrl : controls peak spacing {3 ~ ?}
+    
+     -* plots    : 0 = no plotting, 1 = res, 2 = all
+
+    Returns
+    -------
+    yExp : np.ndarray [shape=(rate * n,)]
+        audio time series spectrally mutated
+
+
+    Examples:
+        NFFT = 2048,
+        yRxExp = detectOnset(ySrc, NFFT, fs)
+
+    '''
+    
+    
+    # currently uses fixed hop_length
+    onset_env = onset_strength(y, fs, hop_length=int(NFFT/4), aggregate=np.median)
+    
+    
+    
+    # peak_pick
+    
+    #peaks = peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)    
+        
+    #    pre_max   : int >= 0 [scalar]
+    #        number of samples before `n` over which max is computed
+    #
+    #    post_max  : int >= 1 [scalar]
+    #        number of samples after `n` over which max is computed
+    #
+    #    pre_avg   : int >= 0 [scalar]
+    #        number of samples before `n` over which mean is computed
+    #
+    #    post_avg  : int >= 1 [scalar]
+    #        number of samples after `n` over which mean is computed
+    #
+    #    delta     : float >= 0 [scalar]
+    #        threshold offset for mean
+    #
+    #    wait      : int >= 0 [scalar]
+    #        number of samples to wait after picking a peak
+    #
+    #    Returns
+    #    -------
+    #    peaks     : np.ndarray [shape=(n_peaks,), dtype=int]
+    #        indices of peaks in `x`
+    
+    #peaks = peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)
+    #peaks = peak_pick(onset_env, 6, 6, 6, 6, 0.5, 8)
+    #peaks = peak_pick(onset_env, 7, 7, 7, 7, 0.5, 7)
+    #peaks = peak_pick(onset_env, 9, 9, 9, 9, 0.5, 7)
+    #peaks = peak_pick(onset_env, 12, 12, 12, 12, 0.5, 6)
+    #peaks = peak_pick(onset_env, 32, 32, 32, 32, 0.5, 32)
+    #peaks = peak_pick(onset_env, 64, 64, 64, 64, 0.5, 64)
+    
+    pkctrl = peakCtrl
+    
+    peaks = peak_pick(onset_env, pkctrl, pkctrl, pkctrl, pkctrl, 0.5, pkctrl)
+    
+    #peak_onsets_ch1 = np.array(onset_env_ch1)[peaks_ch1]
+    #peak_onsets_ch2 = np.array(onset_env_ch2)[peaks_ch2]
+
+
+    # // *-----------------------------------------------------------------* //
+    # // *--- Calculate Peak Regions (# frames of peak regions) ---*
+
+    # peak_regions = get_peak_regions(peaks, len(onset_env))
+
+
+
+    # // *--- Plot - source signal ---*
+
+    if plots > 1:
+    
+        fnum = 3
+        pltTitle = 'Input Signals: aSrc_ch1'
+        pltXlabel = 'sinArray time-domain wav'
+        pltYlabel = 'Magnitude'
+        
+        # define a linear space from 0 to 1/2 Fs for x-axis:
+        xaxis = np.linspace(0, len(y), len(y))
+        
+        xodplt.xodPlot1D(fnum, y, xaxis, pltTitle, pltXlabel, pltYlabel)
+    
+   
+    
+    # // *-----------------------------------------------------------------* //
+    # // *--- Plot Peak-Picking results vs. Spectrogram ---*
+    
+    if plots > 0:
+        
+        # // *-----------------------------------------------------------------* //
+        # // *--- Perform the STFT ---*
+    
+        ySTFT = stft(y, NFFT)    
+        assert (ySTFT.shape[1] == len(onset_env)), "Number of STFT frames != len onset_env"
+
+        #times_ch1 = frames_to_time(np.arange(len(onset_env_ch1)), fs, hop_length=512)
+        # currently uses fixed hop_length
+        times = frames_to_time(np.arange(len(onset_env)), fs, NFFT/4)
+        
+        plt.figure(facecolor='silver', edgecolor='k', figsize=(12, 8))
+        ax = plt.subplot(2, 1, 1)
+        specshow(amplitude_to_db(magphase(ySTFT)[0], ref=np.max), y_axis='log', x_axis='time', cmap=plt.cm.viridis)
+        plt.title('CH1: Spectrogram (STFT)')
+        
+        plt.subplot(2, 1, 2, sharex=ax)
+        plt.plot(times, onset_env, alpha=0.66, label='Onset strength')
+        plt.vlines(times[peaks], 0, onset_env.max(), color='r', alpha=0.8,
+                                                       label='Selected peaks')
+        plt.legend(frameon=True, framealpha=0.66)
+        plt.axis('tight')
+        plt.tight_layout()
+        
+        plt.xlabel('time')
+        plt.ylabel('Amplitude')
+        plt.title('Onset Strength detection & Peak Selection')
+    
+    
+    plt.show()
+
+
+# // *---------------------------------------------------------------------* //
+# // *---------------------------------------------------------------------* //
+# // *---------------------------------------------------------------------* //
 
 
 

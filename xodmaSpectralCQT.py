@@ -28,18 +28,17 @@ import numpy as np
 import scipy.fftpack as fft
 
 
-rootDir = '../'
-sys.path.insert(0, rootDir+'audio/xodma')
+import xodmaSetRootDir as xdir
 
-import cache
+sys.path.insert(0, xdir.rootDir+'audio/xodma')
+
 from xodmaSpectralUtil import note_to_hz, cqt_frequencies, window_bandwidth
 from xodmaSpectralTools import stft, constant_q, constant_q_lengths
 from xodmaPitchDetect import estimate_tuning
 from xodmaMiscUtil import sparsify_rows
 from xodmaAudioTools import resample, BW_FASTEST
 from xodmaParameterError import ParameterError
-
-
+import cache
 
 
 __all__ = ['cqt', 'hybrid_cqt', 'pseudo_cqt']

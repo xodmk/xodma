@@ -24,18 +24,15 @@ import numpy as np
 import scipy
 
 
-rootDir = '../../'
-sys.path.insert(0, rootDir+'audio/xodma')
+import xodmaSetRootDir as xdir
+sys.path.insert(0, xdir.rootDir+'audio/xodma')
 
-
-import cache
-
-#from ._cache import cache
 from . import core
 from . import onset
 from . import util
 from xodmaSpectralFeature import tempogram, fourier_tempogram
 from xodmaParameterError import ParameterError
+import cache
 
 
 ParameterError

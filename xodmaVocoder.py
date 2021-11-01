@@ -23,9 +23,8 @@ import numpy as np
 import scipy as sp
 
 
-rootDir = '../../'
-sys.path.insert(0, rootDir+'audio/xodma')
-
+import xodmaSetRootDir as xdir
+sys.path.insert(0, xdir.rootDir+'audio/xodma')
 
 from xodmaAudioTools import resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length

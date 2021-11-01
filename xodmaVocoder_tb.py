@@ -27,8 +27,6 @@ import numpy as np
 #import scipy as sp
 import matplotlib.pyplot as plt
 
-import xodmaSetRootDir as xdir
-
 
 # temp python debugger - use >>>pdb.set_trace() to set break
 #import pdb
@@ -43,6 +41,11 @@ import xodmaSetRootDir as xdir
 # xdir.audioSrcDir
 # xdir.audioOutDir
 
+runDir = 'C:/XODMK/xodmkCode/xodmkPython/eye/'
+os.chdir(runDir)
+
+import xodmaSetRootDir as xdir
+
 sys.path.insert(0, xdir.rootDir+'audio/xodma')
 
 from xodmaAudioTools import load_wav, write_wav, valid_audio, resample
@@ -53,13 +56,9 @@ from xodmaVocoder import pvTimeStretch, pvPitchShift
 from xodmaSpectralUtil import frames_to_time
 from xodmaSpectralPlot import specshow
 
-#sys.path.insert(0, 'C:/odmkDev/odmkCode/odmkPython/util')
 sys.path.insert(1, xdir.rootDir+'util')
 import xodPlotUtil as xodplt
 
-
-
-#sys.path.insert(1, 'C:/odmkDev/odmkCode/odmkPython/DSP')
 sys.path.insert(2, xdir.rootDir+'DSP')
 import xodClocks as clks
 
