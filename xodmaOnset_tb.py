@@ -38,7 +38,7 @@ import xodmaSetRootDir as xdir
 
 sys.path.insert(0, xdir.rootDir+'audio/xodma')
 from xodmaAudioTools import load_wav
-from xodmaOnset import get_peak_regions, onset_strength, detectOnset
+from xodmaOnset import detectOnset
 #from xodmaSpectralTools import amplitude_to_db, stft, istft, peak_pick
 
 sys.path.insert(1, xdir.rootDir+'util')
@@ -223,7 +223,7 @@ print('// \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ //')
 # srcSel: 0 = wavSrc, 1 = amenBreak, 2 = sineWave48K, 
 #         3 = multiSin test, 4 = text array input
 
-srcSel =  0
+srcSel =  1
 
 
 # STEREO source signal
@@ -378,18 +378,23 @@ if 1:
 
     print('\n// *---:: detectOnset test ::---*')
     
-    peakCtrl = 64
+    # " Default from 'large-scale search' "
+    # peakThresh = 0.07
+    # peakWait = 0.03
+    
+    peakThresh = 0.07
+    peakWait = 0.33 
     
     plots = 1
     
-    yOnsets = detectOnset(aSrc_ch1, NFFT, sr, peakCtrl, plots)
+    
+    yOnsetSamples, yOnsetTime = detectOnset(aSrc_ch1, peakThresh, peakWait)
 
     
-    print('\nPerformed detectOnset ')
+    print('\ndetectOnset complete')
 
 
-  
-    
+
 # // *---------------------------------------------------------------------* //
 
 plt.show()

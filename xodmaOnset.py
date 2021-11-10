@@ -38,63 +38,122 @@ import cache
 sys.path.insert(1, xdir.rootDir+'util')
 import xodPlotUtil as xodplt
 
+# temp python debugger - use >>>pdb.set_trace() to set break
+import pdb
+
+
 
 __all__ = ['get_peak_regions',
+           'detectOnset',
            'onset_detect',
            'onset_strength',
            'onset_strength_multi',
            'onset_backtrack']
 
 
-
-def get_peak_regions(peaks, length):
-    ''' returns an array of peak regions (number of samples between peaks '''
-        
-    peak_regions = np.zeros((len(peaks)+1))
-    for i in range(len(peaks)+1):
-        if i == 0:
-            peak_regions[0] = peaks[0]
-        elif i == len(peaks):
-            peak_regions[i] = length - peaks[i-1]
-        else:
-            peak_regions[i] = peaks[i] - peaks[i-1]
-            
-    return peak_regions
-
-
-
+# // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
 
+def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
+                backtrack=False, plots=1, **kwargs):
+    
+    """Basic onset detector.  Locate note onset events by picking peaks in an
+    onset strength envelope.
 
-def detectOnset(y, NFFT, fs, peakCtrl=32, plots=2):
-    '''Detect onset events for a time-domain signal
+    The `peak_pick` parameters were chosen by large-scale hyper-parameter
+    optimization over the dataset provided by [1]_.
+
+    .. [1] https://github.com/CPJKU/onset_db
+
 
     Parameters
     ----------
-     <- y        : np.ndarray [shape=(n,)] audio time series
+    y          : np.ndarray [shape=(n,)]
+        audio time series
+        
+    peakThresh : controls threshold of onset detection
+        (minimum 0.05 ~ 9.0(?))
     
-     -> NFFT     : number of FFT points
-     -> fs       : audio sample rate
-     
-     -* peakCtrl : controls peak spacing {3 ~ ?}
-    
-     -* plots    : 0 = no plotting, 1 = res, 2 = all
+    peakWait   : controls spacing of onset detections
+        (minimum 0.03 ~ .wav length(?)) - long wait = fewer onsets
+
+    sr         : number > 0 [scalar]
+        sampling rate of `y`
+
+    onset_envelope     : np.ndarray [shape=(m,)]
+        (optional) pre-computed onset strength envelope
+
+    hop_length : int > 0 [scalar]
+        hop length (in samples)
+
+    units : {'frames', 'samples', 'time'}
+        The units to encode detected onset events in.
+        By default, 'frames' are used.
+
+    backtrack : bool
+        If `True`, detected onset events are backtracked to the nearest
+        preceding minimum of `energy`.
+
+        This is primarily useful when using onsets as slice points for segmentation.
+
+    energy : np.ndarray [shape=(m,)] (optional)
+        An energy function to use for backtracking detected onset events.
+        If none is provided, then `onset_envelope` is used.
+
+    kwargs : placeholder for internal use (additional keyword arguments
+        Additional parameters for peak picking.)
+
+        See `librosa.util.peak_pick` for details.
+
 
     Returns
     -------
-    yExp : np.ndarray [shape=(rate * n,)]
-        audio time series spectrally mutated
+
+    onsets : np.ndarray [shape=(n_onsets,)]
+        estimated positions of detected onsets, in whichever units
+        are specified.  By default, frame indices.
+
+        .. note::
+            If no onset strength could be detected, onset_detect returns
+            an empty list.
 
 
-    Examples:
-        NFFT = 2048,
-        yRxExp = detectOnset(ySrc, NFFT, fs)
+    Raises
+    ------
+    ParameterError
+        if neither `y` nor `onsets` are provided
 
-    '''
-    
-    
-    # currently uses fixed hop_length
-    onset_env = onset_strength(y, fs, hop_length=int(NFFT/4), aggregate=np.median)
+        or if `units` is not one of 'frames', 'samples', or 'time'
+
+    See Also
+    --------
+    onset_strength : compute onset strength per-frame
+    onset_backtrack : backtracking onset events
+    librosa.util.peak_pick : pick peaks from a time series
+
+
+    Examples
+    --------
+    Get onset times from a signal
+
+    >>> y, sr = librosa.load(librosa.util.example_audio_file(),
+    ...                      offset=30, duration=2.0)
+    >>> onset_frames = librosa.onset.onset_detect(y=y, sr=sr)
+    >>> librosa.frames_to_time(onset_frames, sr=sr)
+    array([ 0.07 ,  0.395,  0.511,  0.627,  0.766,  0.975,
+            1.207,  1.324,  1.44 ,  1.788,  1.881])
+
+    Or use a pre-computed onset envelope
+
+    >>> o_env = librosa.onset.onset_strength(y, sr=sr)
+    >>> times = librosa.frames_to_time(np.arange(len(o_env)), sr=sr)
+    >>> onset_frames = librosa.onset.onset_detect(onset_envelope=o_env, sr=sr)
+
+    """
+
+
+    onset_env = onset_strength(y=y, sr=sr, hop_length=hop_length,
+                               aggregate=np.median)
     
     
     
@@ -133,12 +192,41 @@ def detectOnset(y, NFFT, fs, peakCtrl=32, plots=2):
     #peaks = peak_pick(onset_env, 32, 32, 32, 32, 0.5, 32)
     #peaks = peak_pick(onset_env, 64, 64, 64, 64, 0.5, 64)
     
-    pkctrl = peakCtrl
     
-    peaks = peak_pick(onset_env, pkctrl, pkctrl, pkctrl, pkctrl, 0.5, pkctrl)
+    #peaks = peak_pick(onset_env, pkctrl, pkctrl, pkctrl, pkctrl, 0.5, pkctrl)
     
     #peak_onsets_ch1 = np.array(onset_env_ch1)[peaks_ch1]
     #peak_onsets_ch2 = np.array(onset_env_ch2)[peaks_ch2]
+    
+    
+    # These parameter settings found by large-scale search
+    # kwargs.setdefault('pre_max', 0.03*sr//hop_length)       # 30ms
+    # kwargs.setdefault('post_max', 0.00*sr//hop_length + 1)  # 0ms
+    # kwargs.setdefault('pre_avg', 0.10*sr//hop_length)       # 100ms
+    # kwargs.setdefault('post_avg', 0.10*sr//hop_length + 1)  # 100ms
+    # kwargs.setdefault('wait', 0.03*sr//hop_length)          # 30ms
+    # kwargs.setdefault('delta', 0.07)
+        
+
+    kwargs.setdefault('pre_max', 0.03*sr//hop_length)       # 30ms
+    kwargs.setdefault('post_max', 0.00*sr//hop_length + 1)  # 0ms
+    kwargs.setdefault('pre_avg', 0.10*sr//hop_length)       # 100ms
+    kwargs.setdefault('post_avg', 0.10*sr//hop_length + 1)  # 100ms
+    #kwargs.setdefault('wait', 0.03*sr//hop_length)         # 30ms
+    kwargs.setdefault('wait', peakWait*sr//hop_length)      # 30ms
+    kwargs.setdefault('delta', peakThresh)
+
+    # Peak pick the onset envelope
+    onsets = peak_pick(onset_env, **kwargs)
+
+    # Optionally backtrack the events
+    if backtrack:
+        onsets = onset_backtrack(onsets, onset_env)
+
+    
+    onsets_samples = frames_to_samples(onsets, hop_length=hop_length)
+    onsets_time = frames_to_time(onsets, hop_length=hop_length, sr=sr)
+
 
 
     # // *-----------------------------------------------------------------* //
@@ -171,13 +259,16 @@ def detectOnset(y, NFFT, fs, peakCtrl=32, plots=2):
         
         # // *-----------------------------------------------------------------* //
         # // *--- Perform the STFT ---*
+        
+        NFFT = 2048
     
-        ySTFT = stft(y, NFFT)    
+        ySTFT = stft(y, NFFT)
+        
         assert (ySTFT.shape[1] == len(onset_env)), "Number of STFT frames != len onset_env"
 
         #times_ch1 = frames_to_time(np.arange(len(onset_env_ch1)), fs, hop_length=512)
         # currently uses fixed hop_length
-        times = frames_to_time(np.arange(len(onset_env)), fs, NFFT/4)
+        times = frames_to_time(np.arange(len(onset_env)), sr, NFFT/4)
         
         plt.figure(facecolor='silver', edgecolor='k', figsize=(12, 8))
         ax = plt.subplot(2, 1, 1)
@@ -186,7 +277,7 @@ def detectOnset(y, NFFT, fs, peakCtrl=32, plots=2):
         
         plt.subplot(2, 1, 2, sharex=ax)
         plt.plot(times, onset_env, alpha=0.66, label='Onset strength')
-        plt.vlines(times[peaks], 0, onset_env.max(), color='r', alpha=0.8,
+        plt.vlines(times[onsets], 0, onset_env.max(), color='r', alpha=0.8,
                                                        label='Selected peaks')
         plt.legend(frameon=True, framealpha=0.66)
         plt.axis('tight')
@@ -199,17 +290,17 @@ def detectOnset(y, NFFT, fs, peakCtrl=32, plots=2):
     
     plt.show()
 
+    
+    return onsets_samples, onsets_time
+
 
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
-# // *---------------------------------------------------------------------* //
-
-
-
 
 def onset_detect(y=None, sr=48000, onset_envelope=None, hop_length=512,
                  backtrack=False, energy=None,
                  units='frames', **kwargs):
+    
     """Basic onset detector.  Locate note onset events by picking peaks in an
     onset strength envelope.
 
@@ -360,6 +451,11 @@ def onset_detect(y=None, sr=48000, onset_envelope=None, hop_length=512,
         raise ParameterError('Invalid unit type: {}'.format(units))
 
     return onsets
+
+
+# // *---------------------------------------------------------------------* //
+# // *---------------------------------------------------------------------* //
+# // *---------------------------------------------------------------------* //
 
 
 def onset_strength(y=None, sr=48000, S=None, lag=1, max_size=1,
@@ -745,3 +841,51 @@ def onset_strength_multi(y=None, sr=48000, S=None, lag=1, max_size=1,
         onset_env = onset_env[:, :S.shape[1]]
 
     return onset_env
+
+
+# // *---------------------------------------------------------------------* //
+# // *---------------------------------------------------------------------* //
+
+def get_peak_regions(peaks, length):
+    ''' returns an array of peak regions (number of samples between peaks '''
+        
+    peak_regions = np.zeros((len(peaks)+1))
+    for i in range(len(peaks)+1):
+        if i == 0:
+            peak_regions[0] = peaks[0]
+        elif i == len(peaks):
+            peak_regions[i] = length - peaks[i-1]
+        else:
+            peak_regions[i] = peaks[i] - peaks[i-1]
+            
+    return peak_regions
+
+
+def getOnsetSampleSegments(onsets_samples, totalSamples):
+    ''' returns an array of peak regions (number of samples between peaks '''
+        
+    onset_sample_segments = np.zeros((len(onsets_samples)+1))
+    for i in range(len(onsets_samples)+1):
+        if i == 0:
+            onset_sample_segments[0] = onsets_samples[0]
+        elif i == len(onsets_samples):
+            onset_sample_segments[i] = totalSamples - onsets_samples[i-1]
+        else:
+            onset_sample_segments[i] = onsets_samples[i] - onsets_samples[i-1]
+            
+    return onset_sample_segments
+
+
+def getOnsetTimeSegments(onsets_time, totalTime):
+    ''' returns an array of peak regions (number of samples between peaks '''
+        
+    onset_time_segments = np.zeros((len(onsets_time)+1))
+    for i in range(len(onsets_time)+1):
+        if i == 0:
+            onset_time_segments[0] = onsets_time[0]
+        elif i == len(onsets_time):
+            onset_time_segments[i] = totalTime - onsets_time[i-1]
+        else:
+            onset_time_segments[i] = onsets_time[i] - onsets_time[i-1]
+            
+    return onset_time_segments
