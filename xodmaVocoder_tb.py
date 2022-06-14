@@ -8,12 +8,12 @@
 # __::((xodmaVocoder_tb.py))::__
 #
 # ___::((XODMK Programming Industries))::___
-# ___::((XODMK:CGBW:BarutanBreaks:djoto:2020))::___
-#
+# ___::((XODMK:CGBW:BarutanBreaks:djoto:2020:2022))::___
 #
 # XODMK Phase Vocoder testbench
 #
-#
+# Requirements
+# sudo apt-get install python3-tk
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
@@ -24,29 +24,26 @@
 import os
 import sys
 import numpy as np
-#import scipy as sp
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 
-# temp python debugger - use >>>pdb.set_trace() to set break
-#import pdb
+# // *---------------------------------------------------------------------* //
+# // *---------------------------------------------------------------------* //
+
+# assumes python projects are located in xodPython
+
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+audioSrcDir = rootDir + "/pyAudio/wavsrc/"
+audioOutDir = rootDir + "/pyAudio/wavout/"
+
+print("rootDir: " + rootDir)
+print("currentDir: " + currentDir)
 
 
-# rootDir = '../../'
-#rootDir = 'C:/XODMK/xodmkCode/xodmkPython/'
-#audioSrcDir = rootDir+'audio/wavsrc/'
-#audioOutDir = rootDir+'audio/test/'
-
-# xdir.rootDir
-# xdir.audioSrcDir
-# xdir.audioOutDir
-
-runDir = 'C:/XODMK/xodmkCode/xodmkPython/eye/'
-os.chdir(runDir)
-
-import xodmaSetRootDir as xdir
-
-sys.path.insert(0, xdir.rootDir+'audio/xodma')
+sys.path.insert(0, rootDir+'/xodma')
 
 from xodmaAudioTools import load_wav, write_wav, valid_audio, resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
@@ -56,11 +53,18 @@ from xodmaVocoder import pvTimeStretch, pvPitchShift
 from xodmaSpectralUtil import frames_to_time
 from xodmaSpectralPlot import specshow
 
-sys.path.insert(1, xdir.rootDir+'util')
+
+sys.path.insert(1, rootDir+'/xodUtil')
 import xodPlotUtil as xodplt
 
-sys.path.insert(2, xdir.rootDir+'DSP')
+sys.path.insert(2, rootDir+'/xodDSP')
 import xodClocks as clks
+
+# temp python debugger - use >>>pdb.set_trace() to set break
+import pdb
+
+
+
 
 
 # // *---------------------------------------------------------------------* //
@@ -78,11 +82,11 @@ plt.close('all')
 
 
 def arrayFromFile(fname):
-    ''' reads .dat data into Numpy array:
+    """ reads .dat data into Numpy array:
         fname is the name of existing file in dataInDir (defined above)
-        example: newArray = arrayFromFile('mydata_in.dat') '''
+        example: newArray = arrayFromFile('mydata_in.dat') """
         
-    fileSrcFull = xdir.audioSrcDir+fname
+    fileSrcFull = audioSrcDir+fname
         
     datalist = []
     with open(fileSrcFull, mode='r') as infile:
@@ -101,11 +105,9 @@ def arrayFromFile(fname):
     return arrayNm
 
 
-
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
-
 
 print('// //////////////////////////////////////////////////////////////// //')
 print('// *--------------------------------------------------------------* //')
@@ -121,29 +123,22 @@ print('// \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ //')
 # srcSel: 0 = wavSrc, 1 = amenBreak, 2 = sineWave48K, 
 #         3 = multiSin test, 4 = text array input
 
-srcSel =  0
-
+srcSel = 0
 
 # STEREO source signal
-#wavSrc = 'dsvco.wav'
-#wavSrc = 'detectiveOctoSpace_one.wav'
-#wavSrc = 'ebolaCallibriscian_uCCrhythm.wav'
-#wavSrc = 'zoroastorian_mdychaos1.wav'
-#wavSrc = 'The_Amen_Break_odmk.wav'
+# wavSrc = 'The_Amen_Break_odmk.wav'
 
 # MONO source signal
-#wavSrc = 'multiSinOut48KHz_1K_3K_5K_7K_9K_16sec.wav'
+# wavSrc = 'multiSinOut48KHz_1K_3K_5K_7K_9K_16sec.wav'
 
-wavSrcA = 'opium_house_1.wav'
-#wavSrcB = 'scoolreaktor_beatx03.wav'
-#wavSrcB = 'gorgulans_beatx01.wav'
+wavSrcA = 'slothForest_btx01.wav'
+# wavSrcB = 'scoolreaktor_beatx03.wav'
+# wavSrcB = 'gorgulans_beatx01.wav'
 
 # length of input signal:
 # '0'   => full length of input .wav file
 # '###' => usr defined length in SECONDS
 wavLength = 0
-
-
 
 NFFT = 2048
 STFTHOP = int(NFFT/4)
@@ -186,46 +181,43 @@ tukey (needs taper fraction)
 # Load Stereo/mono .wav file
 
 
-if (srcSel==0):
+if srcSel==0:
     srcANm = wavSrcA
-elif (srcSel==1):
+elif srcSel==1:
     srcANm = 'The_Amen_Break_48K.wav'
-elif (srcSel==2):
+elif srcSel==2:
     srcANm = 'MonoSinOut_48K_560Hz_5p6sec.wav'
-elif (srcSel==3):
+elif srcSel==3:
     srcANm = 'multiSinOut48KHz_1K_3K_5K_7K_9K_16sec.wav'
     
-audioSrcA = xdir.audioSrcDir+srcANm
+audioSrcA = audioSrcDir+srcANm
 
-#audioSrcB = audioSrcDir+wavSrcB
+# audioSrcB = audioSrcDir+wavSrcB
 
 
-    
 [aSrc, aNumChannels, afs, aLength, aSamples] = load_wav(audioSrcA, wavLength, True)
 
-#[bSrc, bNumChannels, bfs, bLength, bSamples] = load_wav(audioSrcB, wavLength, True)
-
+# [bSrc, bNumChannels, bfs, bLength, bSamples] = load_wav(audioSrcB, wavLength, True)
 
 
 if aNumChannels == 2:
-    aSrc_ch1 = aSrc[:,0];
-    aSrc_ch2 = aSrc[:,1];
+    aSrc_ch1 = aSrc[:, 0]
+    aSrc_ch2 = aSrc[:, 1]
 else:
-    aSrc_ch1 = aSrc;
-    aSrc_ch2 = 0;
+    aSrc_ch1 = aSrc
+    aSrc_ch2 = 0
 
-#if bNumChannels == 2:
+# if bNumChannels == 2:
 #    bSrc_ch1 = bSrc[:,0];
 #    bSrc_ch2 = bSrc[:,1];
-#else:
+# else:
 #    bSrc_ch1 = bSrc;
 #    bSrc_ch2 = 0;
 
 
-
-#aT = 1.0 / afs
-#print('\nsample period: ------------------------- '+str(aT))
-#print('wav file datatype: '+str(sf.info(audioSrcA).subtype))
+# aT = 1.0 / afs
+# print('\nsample period: ------------------------- '+str(aT))
+# print('wav file datatype: '+str(sf.info(audioSrcA).subtype))
 
 
 # // *--- Plot - source signal ---*
@@ -244,7 +236,7 @@ if 1:
         
     plt.show()
 
-#pdb.set_trace()
+# pdb.set_trace()
 
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
@@ -264,14 +256,12 @@ if 1:
     Or half the original speed
 
     >>> y_slow = librosa.effects.time_stretch(y, 0.5) '''
-    
 
     # Time Compress rate:
     R = 1.23
     
     # Time Expand rate:
     S = 0.3
-    
 
     yRxFast_ch1 = pvTimeStretch(aSrc_ch1, 2.0)
     yRxFast_ch2 = pvTimeStretch(aSrc_ch2, 2.0)
@@ -280,36 +270,32 @@ if 1:
     
     print('\nPerformed time_stretch by R (Rxfast)')
     
-    #pdb.set_trace()
+    # pdb.set_trace()
     
     ySxSlow_ch1 = pvTimeStretch(aSrc_ch1, 0.5)
     ySxSlow_ch2 = pvTimeStretch(aSrc_ch2, 0.5)   
 
-    ySxSlow = np.transpose( np.column_stack((ySxSlow_ch1, ySxSlow_ch2)) )
+    ySxSlow = np.transpose(np.column_stack((ySxSlow_ch1, ySxSlow_ch2)))
     
     print('\nPerformed time_stretch by S (Sxslow)')
 
-
     print('\n// *---:: Write .wav files ::---*')
 
-    outFilePath = xdir.audioOutDir+'yOriginal.wav'
+    outFilePath = audioOutDir+'yOriginal.wav'
     write_wav(outFilePath, aSrc, afs)
 
-
-    outFilePath = xdir.audioOutDir+'yRxFast.wav'
+    outFilePath = audioOutDir+'yRxFast.wav'
     write_wav(outFilePath, yRxFast, afs)
-    
-    
-    outFilePath = xdir.audioOutDir+'ySxSlow.wav'
+
+    outFilePath = audioOutDir+'ySxSlow.wav'
     write_wav(outFilePath, ySxSlow, afs)
 
-    print('\n\nOutput directory: '+xdir.audioOutDir)
+    print('\n\nOutput directory: '+audioOutDir)
     print('\nwrote .wav file yOriginal.wav')
     print('\nwrote .wav file yRxFast.wav')
     print('\nwrote .wav file ySxSlow.wav')
 
-  
-    
+
 # // *---------------------------------------------------------------------* //
 
 plt.show()
@@ -322,10 +308,7 @@ print('// *--------------------------------------------------------------* //')
 # // *---------------------------------------------------------------------* //
 
 
-
-
 # reference C code
-
 
 #int pva(float *input, float *window, float *output, 
 #        int input_size, int fftsize, int hopsize, float sr){
