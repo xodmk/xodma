@@ -37,7 +37,8 @@ import six
 rootDir = '../../'
 sys.path.insert(0, rootDir+'audio/xodma')
 
-import cache
+# import cache
+from cache import cache
 from xodmaSpectralUtil import MAX_MEM_BLOCK, note_to_hz, hz_to_midi, hz_to_octs
 from xodmaSpectralUtil import fft_frequencies, mel_frequencies, A_weighting
 from xodmaSpectralUtil import frame, get_window, window_bandwidth

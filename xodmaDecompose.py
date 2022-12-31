@@ -35,7 +35,7 @@ rootDir = '../'
 sys.path.insert(0, rootDir+'audio/xodma')
 
 
-import cache
+from cache import cache
 from xodmaMiscUtil import axis_sort, softmask
 from xodmaSpectralTools import magphase 
 from xodmaAudioSegment import recurrence_matrix

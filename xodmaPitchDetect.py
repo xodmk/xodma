@@ -14,24 +14,21 @@
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
-
+import os
 import sys
 import warnings
 import numpy as np
 
 
-
-import xodmaSetRootDir as xdir
-
-sys.path.insert(0, xdir.rootDir+'audio/xodma')
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+sys.path.insert(0, rootDir+'/xodma/')
 
 from xodmaMiscUtil import tiny, localmax
 from xodmaSpectralTools import mag_spectrogram
 from xodmaSpectralUtil import hz_to_octs, fft_frequencies
 
-
-import cache
-
+from cache import cache
 
 
 __all__ = ['estimate_tuning', 'pitch_tuning', 'piptrack']

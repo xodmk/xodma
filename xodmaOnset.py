@@ -18,14 +18,16 @@
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
+import os
 import sys
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
 
 
-import xodmaSetRootDir as xdir
-sys.path.insert(0, xdir.rootDir+'audio/xodma')
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+sys.path.insert(0, rootDir+'/xodma/')
 
 from xodmaSpectralUtil import frames_to_samples, frames_to_time
 from xodmaMiscUtil import fix_frames, match_events, sync
@@ -33,14 +35,14 @@ from xodmaSpectralTools import magphase, amplitude_to_db, stft, peak_pick, power
 from xodmaSpectralFeature import melspectrogram
 from xodmaSpectralPlot import specshow
 from xodmaParameterError import ParameterError
-import cache
+from cache import cache
 
-sys.path.insert(1, xdir.rootDir+'util')
+
+sys.path.insert(1, rootDir+'/xodUtil')
 import xodPlotUtil as xodplt
 
 # temp python debugger - use >>>pdb.set_trace() to set break
 import pdb
-
 
 
 __all__ = ['get_peak_regions',

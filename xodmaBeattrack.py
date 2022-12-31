@@ -32,7 +32,7 @@ from . import onset
 from . import util
 from xodmaSpectralFeature import tempogram, fourier_tempogram
 from xodmaParameterError import ParameterError
-import cache
+from cache import cache
 
 
 ParameterError

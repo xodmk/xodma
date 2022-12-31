@@ -26,7 +26,7 @@ import scipy.sparse
 rootDir = '../../'
 sys.path.insert(0, rootDir+'audio/xodma')
 
-import cache
+from cache import cache
 import xodmaSpectralUtil as spectralUtil
 from xodmaParameterError import ParameterError
 

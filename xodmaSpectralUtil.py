@@ -18,25 +18,19 @@
 # *****************************************************************************
 
 
-import os
 import sys
 import re
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 import scipy as sp
+#import scipy.signal
 import six
-os.environ['LIBROSA_CACHE_DIR'] = '/tmp/librosa_cache'
 
-currentDir = os.getcwd()
-rootDir = os.path.dirname(currentDir)
-audioOutDir = currentDir + "audio/wavout/"
 
-print("currentDir: " + currentDir)
-print("rootDir: " + rootDir)
+rootDir = '../../'
+sys.path.insert(0, rootDir+'audio/xodma/')
 
-sys.path.insert(0, rootDir+'/xodma')
-
-import cache
+from cache import cache
 from xodmaParameterError import ParameterError
 #from xodmaAudioTools import valid_audio
 

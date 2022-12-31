@@ -33,15 +33,14 @@ import scipy.fftpack as fft
 import resampy
 
 
-# runDir = 'C:/XODMK/xodmkCode/xodmkPython/eye/'
-# os.chdir(runDir)
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
 
-
-import xodmaSetRootDir as xdir
-sys.path.insert(0, xdir.rootDir+'audio/xodma')
+sys.path.insert(0, rootDir+'/xodma/')
 
 from xodmaMiscUtil import fix_length
-import cache
+# import cache
+from cache import cache
 
 
 # // *---------------------------------------------------------------------* //
