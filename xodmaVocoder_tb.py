@@ -28,25 +28,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# temp python debugger - use >>>pdb.set_trace() to set break
-#import pdb
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+audioSrcDir = rootDir + "/data/src/wav/"
+audioOutDir = rootDir + "/data/res/wavout/"
 
+print("currentDir: " + currentDir)
+print("rootDir: " + rootDir)
+print("audioSrcDir: " + audioSrcDir)
+print("audioOutDir: " + audioOutDir)
 
-# rootDir = '../../'
-#rootDir = 'C:/XODMK/xodmkCode/xodmkPython/'
-#audioSrcDir = rootDir+'audio/wavsrc/'
-#audioOutDir = rootDir+'audio/test/'
-
-# xdir.rootDir
-# xdir.audioSrcDir
-# xdir.audioOutDir
-
-runDir = 'C:/XODMK/xodmkCode/xodmkPython/eye/'
-os.chdir(runDir)
-
-import xodmaSetRootDir as xdir
-
-sys.path.insert(0, xdir.rootDir+'audio/xodma')
+sys.path.insert(0, rootDir+'/xodma')
 
 from xodmaAudioTools import load_wav, write_wav, valid_audio, resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
@@ -56,11 +48,15 @@ from xodmaVocoder import pvTimeStretch, pvPitchShift
 from xodmaSpectralUtil import frames_to_time
 from xodmaSpectralPlot import specshow
 
-sys.path.insert(1, xdir.rootDir+'util')
+
+sys.path.insert(1, rootDir+'/xodUtil')
 import xodPlotUtil as xodplt
 
-sys.path.insert(2, xdir.rootDir+'DSP')
+sys.path.insert(2, rootDir+'/xodDSP')
 import xodClocks as clks
+
+# temp python debugger - use >>>pdb.set_trace() to set break
+#import pdb
 
 
 # // *---------------------------------------------------------------------* //
@@ -195,7 +191,7 @@ elif (srcSel==2):
 elif (srcSel==3):
     srcANm = 'multiSinOut48KHz_1K_3K_5K_7K_9K_16sec.wav'
     
-audioSrcA = xdir.audioSrcDir+srcANm
+audioSrcA = audioSrcDir+srcANm
 
 #audioSrcB = audioSrcDir+wavSrcB
 
@@ -292,18 +288,18 @@ if 1:
 
     print('\n// *---:: Write .wav files ::---*')
 
-    outFilePath = xdir.audioOutDir+'yOriginal.wav'
+    outFilePath = audioOutDir+'yOriginal.wav'
     write_wav(outFilePath, aSrc, afs)
 
 
-    outFilePath = xdir.audioOutDir+'yRxFast.wav'
+    outFilePath = audioOutDir+'yRxFast.wav'
     write_wav(outFilePath, yRxFast, afs)
     
     
-    outFilePath = xdir.audioOutDir+'ySxSlow.wav'
+    outFilePath = audioOutDir+'ySxSlow.wav'
     write_wav(outFilePath, ySxSlow, afs)
 
-    print('\n\nOutput directory: '+xdir.audioOutDir)
+    print('\n\nOutput directory: '+audioOutDir)
     print('\nwrote .wav file yOriginal.wav')
     print('\nwrote .wav file yRxFast.wav')
     print('\nwrote .wav file ySxSlow.wav')

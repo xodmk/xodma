@@ -138,8 +138,7 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
     --------
     Get onset times from a signal
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file(),
-    ...                      offset=30, duration=2.0)
+    >>> y, sr = librosa.load(librosa.util.example_audio_file(), offset=30, duration=2.0)
     >>> onset_frames = librosa.onset.onset_detect(y=y, sr=sr)
     >>> librosa.frames_to_time(onset_frames, sr=sr)
     array([ 0.07 ,  0.395,  0.511,  0.627,  0.766,  0.975,
@@ -150,18 +149,12 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
     >>> o_env = librosa.onset.onset_strength(y, sr=sr)
     >>> times = librosa.frames_to_time(np.arange(len(o_env)), sr=sr)
     >>> onset_frames = librosa.onset.onset_detect(onset_envelope=o_env, sr=sr)
-
     """
 
+    onset_env = onset_strength(y=y, sr=sr, hop_length=hop_length, aggregate=np.median)
 
-    onset_env = onset_strength(y=y, sr=sr, hop_length=hop_length,
-                               aggregate=np.median)
-    
-    
-    
     # peak_pick
-    
-    #peaks = peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)    
+    # peaks = peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)
         
     #    pre_max   : int >= 0 [scalar]
     #        number of samples before `n` over which max is computed
@@ -186,21 +179,19 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
     #    peaks     : np.ndarray [shape=(n_peaks,), dtype=int]
     #        indices of peaks in `x`
     
-    #peaks = peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)
-    #peaks = peak_pick(onset_env, 6, 6, 6, 6, 0.5, 8)
-    #peaks = peak_pick(onset_env, 7, 7, 7, 7, 0.5, 7)
-    #peaks = peak_pick(onset_env, 9, 9, 9, 9, 0.5, 7)
-    #peaks = peak_pick(onset_env, 12, 12, 12, 12, 0.5, 6)
-    #peaks = peak_pick(onset_env, 32, 32, 32, 32, 0.5, 32)
-    #peaks = peak_pick(onset_env, 64, 64, 64, 64, 0.5, 64)
+    # peaks = peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)
+    # peaks = peak_pick(onset_env, 6, 6, 6, 6, 0.5, 8)
+    # peaks = peak_pick(onset_env, 7, 7, 7, 7, 0.5, 7)
+    # peaks = peak_pick(onset_env, 9, 9, 9, 9, 0.5, 7)
+    # peaks = peak_pick(onset_env, 12, 12, 12, 12, 0.5, 6)
+    # peaks = peak_pick(onset_env, 32, 32, 32, 32, 0.5, 32)
+    # peaks = peak_pick(onset_env, 64, 64, 64, 64, 0.5, 64)
+
+    # peaks = peak_pick(onset_env, pkctrl, pkctrl, pkctrl, pkctrl, 0.5, pkctrl)
     
-    
-    #peaks = peak_pick(onset_env, pkctrl, pkctrl, pkctrl, pkctrl, 0.5, pkctrl)
-    
-    #peak_onsets_ch1 = np.array(onset_env_ch1)[peaks_ch1]
-    #peak_onsets_ch2 = np.array(onset_env_ch2)[peaks_ch2]
-    
-    
+    # peak_onsets_ch1 = np.array(onset_env_ch1)[peaks_ch1]
+    # peak_onsets_ch2 = np.array(onset_env_ch2)[peaks_ch2]
+
     # These parameter settings found by large-scale search
     # kwargs.setdefault('pre_max', 0.03*sr//hop_length)       # 30ms
     # kwargs.setdefault('post_max', 0.00*sr//hop_length + 1)  # 0ms
@@ -208,14 +199,12 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
     # kwargs.setdefault('post_avg', 0.10*sr//hop_length + 1)  # 100ms
     # kwargs.setdefault('wait', 0.03*sr//hop_length)          # 30ms
     # kwargs.setdefault('delta', 0.07)
-        
 
-    kwargs.setdefault('pre_max', 0.03*sr//hop_length)       # 30ms
-    kwargs.setdefault('post_max', 0.00*sr//hop_length + 1)  # 0ms
-    kwargs.setdefault('pre_avg', 0.10*sr//hop_length)       # 100ms
-    kwargs.setdefault('post_avg', 0.10*sr//hop_length + 1)  # 100ms
-    #kwargs.setdefault('wait', 0.03*sr//hop_length)         # 30ms
-    kwargs.setdefault('wait', peakWait*sr//hop_length)      # 30ms
+    kwargs.setdefault('pre_max', 0.03 * sr // hop_length)       # 30ms
+    kwargs.setdefault('post_max', 0.00 * sr // hop_length + 1)  # 0ms
+    kwargs.setdefault('pre_avg', 0.10 * sr // hop_length)       # 100ms
+    kwargs.setdefault('post_avg', 0.10 * sr // hop_length + 1)  # 100ms
+    kwargs.setdefault('wait', peakWait * sr // hop_length)      # 30ms
     kwargs.setdefault('delta', peakThresh)
 
     # Peak pick the onset envelope
@@ -225,18 +214,13 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
     if backtrack:
         onsets = onset_backtrack(onsets, onset_env)
 
-    
     onsets_samples = frames_to_samples(onsets, hop_length=hop_length)
     onsets_time = frames_to_time(onsets, hop_length=hop_length, sr=sr)
-
-
 
     # // *-----------------------------------------------------------------* //
     # // *--- Calculate Peak Regions (# frames of peak regions) ---*
 
     # peak_regions = get_peak_regions(peaks, len(onset_env))
-
-
 
     # // *--- Plot - source signal ---*
 
@@ -252,8 +236,6 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
         
         xodplt.xodPlot1D(fnum, y, xaxis, pltTitle, pltXlabel, pltYlabel)
     
-   
-    
     # // *-----------------------------------------------------------------* //
     # // *--- Plot Peak-Picking results vs. Spectrogram ---*
     
@@ -263,18 +245,15 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
         # // *--- Perform the STFT ---*
         
         NFFT = 2048
-    
         ySTFT = stft(y, NFFT)
-        
         assert (ySTFT.shape[1] == len(onset_env)), "Number of STFT frames != len onset_env"
 
-        #times_ch1 = frames_to_time(np.arange(len(onset_env_ch1)), fs, hop_length=512)
+        # times_ch1 = frames_to_time(np.arange(len(onset_env_ch1)), fs, hop_length=512)
         # currently uses fixed hop_length
         times = frames_to_time(np.arange(len(onset_env)), sr, NFFT/4)
-        
         plt.figure(facecolor='silver', edgecolor='k', figsize=(12, 8))
         ax = plt.subplot(2, 1, 1)
-        specshow(amplitude_to_db(magphase(ySTFT)[0], ref=np.max), y_axis='log', x_axis='time', cmap=plt.cm.viridis)
+        # specshow(amplitude_to_db(magphase(ySTFT)[0], ref=np.max), y_axis='log', x_axis='time', cmap=plt.cm.viridis)
         plt.title('CH1: Spectrogram (STFT)')
         
         plt.subplot(2, 1, 2, sharex=ax)
@@ -288,11 +267,9 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
         plt.xlabel('time')
         plt.ylabel('Amplitude')
         plt.title('Onset Strength detection & Peak Selection')
-    
-    
+
     plt.show()
 
-    
     return onsets_samples, onsets_time
 
 

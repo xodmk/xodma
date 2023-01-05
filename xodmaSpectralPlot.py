@@ -9,7 +9,7 @@
 #
 # Spectral Tools Plotting functions - Spectragram etc..
 #
-#       
+#
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
@@ -23,11 +23,9 @@ Display
 =======
 .. autosummary::
     :toctree: generated/
-
     specshow
     waveplot
     cmap
-
     TimeFormatter
     NoteFormatter
     LogHzFormatter
@@ -35,6 +33,7 @@ Display
     TonnetzFormatter
 """
 
+import os
 import sys
 import warnings
 
@@ -45,15 +44,18 @@ from matplotlib.ticker import LogLocator, FixedLocator, MaxNLocator
 from matplotlib.ticker import SymmetricalLogLocator
 
 
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
 
-rootDir = '../'
-
-sys.path.insert(0, rootDir+'audio/xodma')
+sys.path.insert(0, rootDir+'/xodma')
 from xodmaSpectralUtil import frame, frames_to_time, tempo_frequencies
 from xodmaSpectralUtil import fft_frequencies, cqt_frequencies, mel_frequencies
 from xodmaSpectralUtil import note_to_hz, hz_to_note, midi_to_note
 from xodmaSpectralUtil import ParameterError
 from xodmaAudioTools import valid_audio
+
+# temp python debugger - use >>>pdb.set_trace() to set break
+import pdb
 
 
 
@@ -69,27 +71,19 @@ __all__ = ['specshow',
 
 class TimeFormatter(Formatter):
     '''A tick formatter for time axes.
-
     Automatically switches between seconds, minutes:seconds,
     or hours:minutes:seconds.
-
     Parameters
     ----------
     lag : bool
         If `True`, then the time axis is interpreted in lag coordinates.
         Anything past the mid-point will be converted to negative time.
-
-
     See also
     --------
     matplotlib.ticker.Formatter
-
-
     Examples
     --------
-
     For normal time
-
     >>> import matplotlib.pyplot as plt
     >>> times = np.arange(30)
     >>> values = np.random.randn(len(times))
@@ -98,9 +92,7 @@ class TimeFormatter(Formatter):
     >>> ax.plot(times, values)
     >>> ax.xaxis.set_major_formatter(librosa.display.TimeFormatter())
     >>> ax.set_xlabel('Time')
-
     For lag plots
-
     >>> times = np.arange(60)
     >>> values = np.random.randn(len(times))
     >>> plt.figure()
@@ -147,24 +139,18 @@ class TimeFormatter(Formatter):
 
 class NoteFormatter(Formatter):
     '''Ticker formatter for Notes
-
     Parameters
     ----------
     octave : bool
         If `True`, display the octave number along with the note name.
-
         Otherwise, only show the note name (and cent deviation)
-
     major : bool
         If `True`, ticks are always labeled.
-
         If `False`, ticks are only labeled if the span is less than 2 octaves
-
     See also
     --------
     LogHzFormatter
     matplotlib.ticker.Formatter
-
     Examples
     --------
     >>> import matplotlib.pyplot as plt
@@ -201,19 +187,15 @@ class NoteFormatter(Formatter):
 
 class LogHzFormatter(Formatter):
     '''Ticker formatter for logarithmic frequency
-
     Parameters
     ----------
     major : bool
         If `True`, ticks are always labeled.
-
         If `False`, ticks are only labeled if the span is less than 2 octaves
-
     See also
     --------
     NoteFormatter
     matplotlib.ticker.Formatter
-
     Examples
     --------
     >>> import matplotlib.pyplot as plt
@@ -247,11 +229,9 @@ class LogHzFormatter(Formatter):
 
 class ChromaFormatter(Formatter):
     '''A formatter for chroma axes
-
     See also
     --------
     matplotlib.ticker.Formatter
-
     Examples
     --------
     >>> import matplotlib.pyplot as plt
@@ -269,11 +249,9 @@ class ChromaFormatter(Formatter):
 
 class TonnetzFormatter(Formatter):
     '''A formatter for tonnetz axes
-
     See also
     --------
     matplotlib.ticker.Formatter
-
     Examples
     --------
     >>> import matplotlib.pyplot as plt
@@ -292,37 +270,27 @@ class TonnetzFormatter(Formatter):
 
 def cmap(data, robust=True, cmap_seq='magma', cmap_bool='gray_r', cmap_div='coolwarm'):
     '''Get a default colormap from the given data.
-
     If the data is boolean, use a black and white colormap.
-
     If the data has both positive and negative values,
     use a diverging colormap.
-
     Otherwise, use a sequential colormap.
-
     Parameters
     ----------
     data : np.ndarray
         Input data
-
     robust : bool
         If True, discard the top and bottom 2% of data when calculating
         range.
-
     cmap_seq : str
         The sequential colormap name
-
     cmap_bool : str
         The boolean colormap name
-
     cmap_div : str
         The diverging colormap name
-
     Returns
     -------
     cmap : matplotlib.colors.Colormap
         The colormap to use for `data`
-
     See Also
     --------
     matplotlib.pyplot.colormaps
@@ -357,74 +325,54 @@ def __envelope(x, hop):
 def waveplot(y, sr=48000, max_points=5e4, x_axis='time', offset=0.0, max_sr=1000,
              **kwargs):
     '''Plot the amplitude envelope of a waveform.
-
     If `y` is monophonic, a filled curve is drawn between `[-abs(y), abs(y)]`.
-
     If `y` is stereo, the curve is drawn between `[-abs(y[1]), abs(y[0])]`,
     so that the left and right channels are drawn above and below the axis,
     respectively.
-
     Long signals (`duration >= max_points`) are down-sampled to at
     most `max_sr` before plotting.
-
     Parameters
     ----------
     y : np.ndarray [shape=(n,) or (2,n)]
         audio time series (mono or stereo)
-
     sr : number > 0 [scalar]
         sampling rate of `y`
-
     max_points : postive number or None
         Maximum number of time-points to plot: if `max_points` exceeds
         the duration of `y`, then `y` is downsampled.
-
         If `None`, no downsampling is performed.
-
     x_axis : str {'time', 'off', 'none'} or None
         If 'time', the x-axis is given time tick-marks.
-
     offset : float
         Horizontal offset (in time) to start the waveform plot
-
     max_sr : number > 0 [scalar]
         Maximum sampling rate for the visualization
-
     kwargs
         Additional keyword arguments to `matplotlib.pyplot.fill_between`
-
     Returns
     -------
     pc : matplotlib.collections.PolyCollection
         The PolyCollection created by `fill_between`.
-
     See also
     --------
     librosa.core.resample
     matplotlib.pyplot.fill_between
-
-
     Examples
     --------
     Plot a monophonic waveform
-
     >>> import matplotlib.pyplot as plt
     >>> y, sr = librosa.load(librosa.util.example_audio_file(), duration=10)
     >>> plt.figure()
     >>> plt.subplot(3, 1, 1)
     >>> librosa.display.waveplot(y, sr=sr)
     >>> plt.title('Monophonic')
-
     Or a stereo waveform
-
     >>> y, sr = librosa.load(librosa.util.example_audio_file(),
     ...                      mono=False, duration=10)
     >>> plt.subplot(3, 1, 2)
     >>> librosa.display.waveplot(y, sr=sr)
     >>> plt.title('Stereo')
-
     Or harmonic and percussive components with transparency
-
     >>> y, sr = librosa.load(librosa.util.example_audio_file(), duration=10)
     >>> y_harm, y_perc = librosa.effects.hpss(y)
     >>> plt.subplot(3, 1, 3)
@@ -491,181 +439,121 @@ def specshow(data, x_coords=None, y_coords=None,
              bins_per_octave=12,
              **kwargs):
     '''Display a spectrogram/chromagram/cqt/etc.
-
-
     Parameters
     ----------
     data : np.ndarray [shape=(d, n)]
         Matrix to display (e.g., spectrogram)
-
     sr : number > 0 [scalar]
         Sample rate used to determine time scale in x-axis.
-
     hop_length : int > 0 [scalar]
         Hop length, also used to determine time scale in x-axis
-
     x_axis : None or str
-
     y_axis : None or str
         Range for the x- and y-axes.
-
         Valid types are:
-
         - None, 'none', or 'off' : no axis decoration is displayed.
-
         Frequency types:
-
         - 'linear', 'fft', 'hz' : frequency range is determined by
           the FFT window and sampling rate.
         - 'log' : the spectrum is displayed on a log scale.
         - 'mel' : frequencies are determined by the mel scale.
         - 'cqt_hz' : frequencies are determined by the CQT scale.
         - 'cqt_note' : pitches are determined by the CQT scale.
-
         All frequency types are plotted in units of Hz.
-
         Categorical types:
-
         - 'chroma' : pitches are determined by the chroma filters.
           Pitch classes are arranged at integer locations (0-11).
-
         - 'tonnetz' : axes are labeled by Tonnetz dimensions (0-5)
         - 'frames' : markers are shown as frame counts.
-
-
         Time types:
-
         - 'time' : markers are shown as milliseconds, seconds,
           minutes, or hours
         - 'lag' : like time, but past the half-way point counts
           as negative values.
-
         All time types are plotted in units of seconds.
-
         Other:
-
         - 'tempo' : markers are shown as beats-per-minute (BPM)
             using a logarithmic scale.
-
     x_coords : np.ndarray [shape=data.shape[1]+1]
     y_coords : np.ndarray [shape=data.shape[0]+1]
-
         Optional positioning coordinates of the input data.
         These can be use to explicitly set the location of each
         element `data[i, j]`, e.g., for displaying beat-synchronous
         features in natural time coordinates.
-
         If not provided, they are inferred from `x_axis` and `y_axis`.
-
     fmin : float > 0 [scalar] or None
         Frequency of the lowest spectrogram bin.  Used for Mel and CQT
         scales.
-
         If `y_axis` is `cqt_hz` or `cqt_note` and `fmin` is not given,
         it is set by default to `note_to_hz('C1')`.
-
     fmax : float > 0 [scalar] or None
         Used for setting the Mel frequency scales
-
     bins_per_octave : int > 0 [scalar]
         Number of bins per octave.  Used for CQT frequency scale.
-
     kwargs : additional keyword arguments
         Arguments passed through to `matplotlib.pyplot.pcolormesh`.
-
         By default, the following options are set:
-
             - `rasterized=True`
             - `shading='flat'`
             - `edgecolors='None'`
-
     Returns
     -------
     axes
         The axis handle for the figure.
-
-
     See Also
     --------
     cmap : Automatic colormap detection
-
     matplotlib.pyplot.pcolormesh
-
-
     Examples
     --------
     Visualize an STFT power spectrum
-
     >>> import matplotlib.pyplot as plt
     >>> y, sr = librosa.load(librosa.util.example_audio_file())
     >>> plt.figure(figsize=(12, 8))
-
     >>> D = librosa.amplitude_to_db(librosa.stft(y), ref=np.max)
     >>> plt.subplot(4, 2, 1)
     >>> librosa.display.specshow(D, y_axis='linear')
     >>> plt.colorbar(format='%+2.0f dB')
     >>> plt.title('Linear-frequency power spectrogram')
-
-
     Or on a logarithmic scale
-
     >>> plt.subplot(4, 2, 2)
     >>> librosa.display.specshow(D, y_axis='log')
     >>> plt.colorbar(format='%+2.0f dB')
     >>> plt.title('Log-frequency power spectrogram')
-
-
     Or use a CQT scale
-
     >>> CQT = librosa.amplitude_to_db(librosa.cqt(y, sr=sr), ref=np.max)
     >>> plt.subplot(4, 2, 3)
     >>> librosa.display.specshow(CQT, y_axis='cqt_note')
     >>> plt.colorbar(format='%+2.0f dB')
     >>> plt.title('Constant-Q power spectrogram (note)')
-
     >>> plt.subplot(4, 2, 4)
     >>> librosa.display.specshow(CQT, y_axis='cqt_hz')
     >>> plt.colorbar(format='%+2.0f dB')
     >>> plt.title('Constant-Q power spectrogram (Hz)')
-
-
     Draw a chromagram with pitch classes
-
     >>> C = librosa.feature.chroma_cqt(y=y, sr=sr)
     >>> plt.subplot(4, 2, 5)
     >>> librosa.display.specshow(C, y_axis='chroma')
     >>> plt.colorbar()
     >>> plt.title('Chromagram')
-
-
     Force a grayscale colormap (white -> black)
-
     >>> plt.subplot(4, 2, 6)
     >>> librosa.display.specshow(D, cmap='gray_r', y_axis='linear')
     >>> plt.colorbar(format='%+2.0f dB')
     >>> plt.title('Linear power spectrogram (grayscale)')
-
-
     Draw time markers automatically
-
     >>> plt.subplot(4, 2, 7)
     >>> librosa.display.specshow(D, x_axis='time', y_axis='log')
     >>> plt.colorbar(format='%+2.0f dB')
     >>> plt.title('Log power spectrogram')
-
-
     Draw a tempogram with BPM markers
-
     >>> plt.subplot(4, 2, 8)
     >>> Tgram = librosa.feature.tempogram(y=y, sr=sr)
     >>> librosa.display.specshow(Tgram, x_axis='time', y_axis='tempo')
     >>> plt.colorbar()
     >>> plt.title('Tempogram')
     >>> plt.tight_layout()
-
-
     Draw beat-synchronous chroma in natural time
-
     >>> plt.figure()
     >>> tempo, beat_f = librosa.beat.beat_track(y=y, sr=sr, trim=False)
     >>> beat_f = librosa.util.fix_frames(beat_f, x_max=C.shape[1])
@@ -862,7 +750,10 @@ def __decorate_axis(axis, ax_type):
 def __coord_fft_hz(n, sr=48000, **_kwargs):
     '''Get the frequencies for FFT bins'''
     n_fft = 2 * (n - 1)
-    return fft_frequencies(sr=sr, n_fft=1+n_fft)
+    fftFreqs = fft_frequencies(sr=sr, n_fft=n_fft)
+    fftFreqCoords = np.append(fftFreqs, (fftFreqs[-1] + (fftFreqs[-1] - fftFreqs[-2])))
+    # return fft_frequencies(sr=sr, n_fft=1+n_fft)
+    return fftFreqCoords
 
 
 def __coord_mel_hz(n, fmin=0, fmax=11025.0, **_kwargs):

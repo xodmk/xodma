@@ -29,19 +29,24 @@ import soundfile as sf
 import matplotlib.pyplot as plt
 
 
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+audioSrcDir = rootDir + "/data/src/wav/"
+audioOutDir = rootDir + "/data/res/wavout/"
 
-runDir = 'C:/XODMK/xodmkCode/xodmkPython/audio/xodma/'
-os.chdir(runDir)
+print("currentDir: " + currentDir)
+print("rootDir: " + rootDir)
+print("audioSrcDir: " + audioSrcDir)
+print("audioOutDir: " + audioOutDir)
 
 
-import xodmaSetRootDir as xdir
+sys.path.insert(0, rootDir+'/xodma')
 
-sys.path.insert(0, xdir.rootDir+'audio/xodma')
 from xodmaAudioTools import load_wav
 from xodmaOnset import detectOnset
 #from xodmaSpectralTools import amplitude_to_db, stft, istft, peak_pick
 
-sys.path.insert(1, xdir.rootDir+'util')
+sys.path.insert(1, rootDir+'/xodUtil')
 import xodPlotUtil as xodplt
 
 #sys.path.insert(3, rootDir+'DSP')
@@ -71,7 +76,7 @@ def arrayFromFile(fname):
         fname is the name of existing file in dataInDir (defined above)
         example: newArray = arrayFromFile('mydata_in.dat') '''
         
-    fileSrcFull = xdir.audioSrcDir+fname
+    fileSrcFull = audioSrcDir+fname
         
     datalist = []
     with open(fileSrcFull, mode='r') as infile:
@@ -89,15 +94,10 @@ def arrayFromFile(fname):
     
     return arrayNm
 
-
-
-
-
 # // *---------------------------------------------------------------------* //
 
 
-
-#def detectOnset(y, NFFT, fs):
+# def detectOnset(y, NFFT, fs):
 #    '''Detect onset events for a time-domain signal
 #
 #    Parameters
@@ -118,13 +118,10 @@ def arrayFromFile(fname):
 #        yRxExp = detectOnset(ySrc, NFFT, fs)
 #
 #    '''
-#    
-#    
+#
 #    # currently uses fixed hop_length
 #    onset_env = onset_strength(y, fs, hop_length=int(NFFT/4), aggregate=np.median)
-#    
-#    
-#    
+#
 #    # peak_pick
 #    
 #    #peaks = peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)    
@@ -213,7 +210,7 @@ print('// //////////////////////////////////////////////////////////////// //')
 print('// *--------------------------------------------------------------* //')
 print('// *---::XODMK Spectral Mutate test::---*')
 print('// *--------------------------------------------------------------* //')
-print('// \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ //')
+print('// //////////////////////////////////////////////////////////////// //')
 
 
 # // *---------------------------------------------------------------------* //
@@ -223,7 +220,7 @@ print('// \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ //')
 # srcSel: 0 = wavSrc, 1 = amenBreak, 2 = sineWave48K, 
 #         3 = multiSin test, 4 = text array input
 
-srcSel =  1
+srcSel = 1
 
 
 # STEREO source signal
@@ -237,18 +234,14 @@ srcSel =  1
 #wavSrc = 'multiSinOut48KHz_1K_3K_5K_7K_9K_16sec.wav'
 
 wavSrcA = 'fromTheVoid_x0x.wav'
-#wavSrcB = 'scoolreaktor_beatx03.wav'
-wavSrcB = 'mescaQuetzalcoatl135x002.wav'
 
 # length of input signal:
 # '0'   => full length of input .wav file
 # '###' => usr defined length in SECONDS
 wavLength = 0
 
-
-
 NFFT = 2048
-STFTHOP = int(NFFT/4)
+STFTHOP = int(NFFT / 4)
 WIN = 'hann'
 
 
@@ -280,49 +273,31 @@ tukey (needs taper fraction)
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
 
-
 # inputs:  wavIn, audioSrcDir, wavLength
 # outputs: ySrc_ch1, ySrc_ch2, numChannels, fs, ySamples
 
-
 # Load Stereo/mono .wav file
 
-
-if (srcSel==0):
+if srcSel == 0:
     srcANm = wavSrcA
-elif (srcSel==1):
+elif srcSel == 1:
     srcANm = 'The_Amen_Break_48K.wav'
-elif (srcSel==2):
+elif srcSel == 2:
     srcANm = 'MonoSinOut_48K_560Hz_5p6sec.wav'
-elif (srcSel==3):
+elif srcSel == 3:
     srcANm = 'multiSinOut48KHz_1K_3K_5K_7K_9K_16sec.wav'
 
+audioSrcA = audioSrcDir+srcANm
 
-audioSrcA = xdir.audioSrcDir+srcANm
-audioSrcB = xdir.audioSrcDir+wavSrcB
-
-    
 [aSrc, aNumChannels, afs, aLength, aSamples] = load_wav(audioSrcA, wavLength)
 print('\n// Loaded .wav file [ '+audioSrcA+' ]\n')
 
-[bSrc, bNumChannels, bfs, bLength, bSamples] = load_wav(audioSrcB, wavLength)
-print('\n// Loaded .wav file [ '+audioSrcB+' ]\n')
-
-
-
 if aNumChannels == 2:
-    aSrc_ch1 = aSrc[:,0];
-    aSrc_ch2 = aSrc[:,1];
+    aSrc_ch1 = aSrc[:, 0]
+    aSrc_ch2 = aSrc[:, 1]
 else:
-    aSrc_ch1 = aSrc;
-    aSrc_ch2 = 0;
-
-if bNumChannels == 2:
-    bSrc_ch1 = bSrc[:,0];
-    bSrc_ch2 = bSrc[:,1];
-else:
-    bSrc_ch1 = bSrc;
-    bSrc_ch2 = 0;
+    aSrc_ch1 = aSrc
+    aSrc_ch2 = 0
 
 
 # length of input signal - '0' => length of input .wav file
@@ -332,14 +307,6 @@ print('length of input signal in seconds: ----- '+str(aLength))
 print('length of input signal in samples: ----- '+str(aSamples))
 print('audio sample rate: --------------------- '+str(afs))
 print('wav file datatype: '+str(sf.info(audioSrcA).subtype))
-
-
-print('\nChannel B Source Audio:') 
-print('bSrc Channels = '+str(len(np.shape(aSrc))))
-print('length of input signal in seconds: ----- '+str(bLength))
-print('length of input signal in samples: ----- '+str(bSamples))
-print('audio sample rate: --------------------- '+str(bfs))
-print('wav file datatype: '+str(sf.info(audioSrcB).subtype))
 
 
 sr = afs
@@ -365,14 +332,11 @@ if 1:
     xaxis = np.linspace(0, len(aSrc_ch1), len(aSrc_ch1))
     
     xodplt.xodPlot1D(fnum, aSrc_ch1, xaxis, pltTitle, pltXlabel, pltYlabel)
-        
-    plt.show()
 
 #pdb.set_trace()
 
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
-
 
 if 1:
 
@@ -386,13 +350,10 @@ if 1:
     peakWait = 0.33 
     
     plots = 1
-    
-    
+
     yOnsetSamples, yOnsetTime = detectOnset(aSrc_ch1, peakThresh, peakWait)
 
-    
     print('\ndetectOnset complete')
-
 
 
 # // *---------------------------------------------------------------------* //
