@@ -10,9 +10,8 @@
 # ___::((XODMK:CGBW:BarutanBreaks:djoto:2020))::___
 #
 #
-# XODMK Phase Vocoder Spectral Mutator EFFX
+# XODMK Onset Detection Testbench
 #
-# Using Librosa vocoder implementation for model
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////

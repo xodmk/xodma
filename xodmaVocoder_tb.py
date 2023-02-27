@@ -42,18 +42,21 @@ sys.path.insert(0, rootDir+'/xodma')
 
 from xodmaAudioTools import load_wav, write_wav, valid_audio, resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
-from xodmaSpectralTools import amplitude_to_db, stft, istft, peak_pick
+# from xodmaSpectralTools import amplitude_to_db, stft, istft, peak_pick
 from xodmaSpectralTools import magphase
 from xodmaVocoder import pvTimeStretch, pvPitchShift
 from xodmaSpectralUtil import frames_to_time
 from xodmaSpectralPlot import specshow
 
 
-sys.path.insert(1, rootDir+'/xodUtil')
-import xodPlotUtil as xodplt
+sys.path.insert(1, rootDir+'/xodLibrosa')
+from spectrum import amplitude_to_db, stft, istft, peak_pick, magphase
 
 sys.path.insert(2, rootDir+'/xodDSP')
 import xodClocks as clks
+
+sys.path.insert(3, rootDir+'/xodUtil')
+import xodPlotUtil as xodplt
 
 # temp python debugger - use >>>pdb.set_trace() to set break
 #import pdb
@@ -78,7 +81,7 @@ def arrayFromFile(fname):
         fname is the name of existing file in dataInDir (defined above)
         example: newArray = arrayFromFile('mydata_in.dat') '''
         
-    fileSrcFull = xdir.audioSrcDir+fname
+    fileSrcFull = audioSrcDir+fname
         
     datalist = []
     with open(fileSrcFull, mode='r') as infile:
@@ -117,7 +120,7 @@ print('// \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ //')
 # srcSel: 0 = wavSrc, 1 = amenBreak, 2 = sineWave48K, 
 #         3 = multiSin test, 4 = text array input
 
-srcSel =  0
+srcSel = 0
 
 
 # STEREO source signal

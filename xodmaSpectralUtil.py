@@ -23,7 +23,7 @@ import re
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 import scipy as sp
-#import scipy.signal
+# import scipy.signal
 import six
 
 
@@ -32,11 +32,11 @@ sys.path.insert(0, rootDir+'audio/xodma/')
 
 from cache import cache
 from xodmaParameterError import ParameterError
-#from xodmaAudioTools import valid_audio
+# from xodmaAudioTools import valid_audio
 
 
 # temp python debugger - use >>>pdb.set_trace() to set break
-#import pdb
+# import pdb
 
 
 # // *---------------------------------------------------------------------* //
@@ -44,7 +44,6 @@ from xodmaParameterError import ParameterError
 # Constrain STFT block sizes to 256 KB
 # ** note: pymalloc allocates memory in 256 kB chunks, called arenas
 MAX_MEM_BLOCK = 2**8 * 2**10
-
 
 
 __all__ = ['MAX_MEM_BLOCK', 'frame',
@@ -64,8 +63,7 @@ __all__ = ['MAX_MEM_BLOCK', 'frame',
            'window_bandwidth',
            'get_window']
            
-           
-           
+
 # Dictionary of window function bandwidths
 
 WINDOW_BANDWIDTHS = {'bart': 1.3334961334912805,
@@ -110,9 +108,8 @@ WINDOW_BANDWIDTHS = {'bart': 1.3334961334912805,
                      'triangle': 1.3331706523555851}
 
 
-
 def frame(y, frame_length=2048, hop_length=512):
-    '''Slice a time series into overlapping frames.
+    """Slice a time series into overlapping frames.
 
     This implementation uses low-level stride manipulation to avoid
     redundant copies of the time series data.
@@ -147,15 +144,15 @@ def frame(y, frame_length=2048, hop_length=512):
     --------
     Extract 2048-sample frames from `y` with a hop of 64 samples per frame
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> librosa.util.frame(y, frame_length=2048, hop_length=64)
+    >> y, sr = librosa.load(librosa.util.example_audio_file())
+    >> librosa.util.frame(y, frame_length=2048, hop_length=64)
     array([[ -9.216e-06,   7.710e-06, ...,  -2.117e-06,  -4.362e-07],
            [  2.518e-06,  -6.294e-06, ...,  -1.775e-05,  -6.365e-06],
            ...,
            [ -7.429e-04,   5.173e-03, ...,   1.105e-05,  -5.074e-06],
            [  2.169e-03,   4.867e-03, ...,   3.666e-06,  -5.571e-06]], dtype=float32)
 
-    '''
+    """
 
     if len(y) < frame_length:
         raise ParameterError('Buffer is too short (n={:d})'
@@ -208,9 +205,9 @@ def frames_to_samples(frames, hop_length=512, n_fft=None):
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> tempo, beats = librosa.beat.beat_track(y, sr=sr)
-    >>> beat_samples = librosa.frames_to_samples(beats)
+    >> y, sr = librosa.load(librosa.util.example_audio_file())
+    >> tempo, beats = librosa.beat.beat_track(y, sr=sr)
+    >> beat_samples = librosa.frames_to_samples(beats)
     """
 
     offset = 0
@@ -225,8 +222,8 @@ def samples_to_frames(samples, hop_length=512, n_fft=None):
 
     Examples
     --------
-    >>> # Get the frame numbers for every 256 samples
-    >>> samples_to_frames(np.arange(0, 48000, 256))
+    >> # Get the frame numbers for every 256 samples
+    >> samples_to_frames(np.arange(0, 48000, 256))
     array([ 0,  0,  1,  1,  2,  2,  3,  3,  4,  4,  5,  5,  6,  6,
             7,  7,  8,  8,  9,  9, 10, 10, 11, 11, 12, 12, 13, 13,
            14, 14, 15, 15, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20,
@@ -302,9 +299,9 @@ def frames_to_time(frames, sr=48000, hop_length=512, n_fft=None):
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> tempo, beats = librosa.beat.beat_track(y, sr=sr)
-    >>> beat_times = librosa.frames_to_time(beats, sr=sr)
+    >> y, sr = librosa.load(librosa.util.example_audio_file())
+    >> tempo, beats = librosa.beat.beat_track(y, sr=sr)
+    >> beat_times = librosa.frames_to_time(beats, sr=sr)
     """
 
     samples = frames_to_samples(frames,
@@ -350,7 +347,7 @@ def time_to_frames(times, sr=48000, hop_length=512, n_fft=None):
     --------
     Get the frame numbers for every 100ms
 
-    >>> librosa.time_to_frames(np.arange(0, 1, 0.1),
+    >> librosa.time_to_frames(np.arange(0, 1, 0.1),
     ...                         sr=48000, hop_length=512)
     array([ 0,  4,  8, 12, 17, 21, 25, 30, 34, 38])
 
@@ -384,7 +381,7 @@ def time_to_samples(times, sr=48000):
 
     Examples
     --------
-    >>> librosa.time_to_samples(np.arange(0, 1, 0.1), sr=48000)
+    >> librosa.time_to_samples(np.arange(0, 1, 0.1), sr=48000)
     array([    0,  2205,  4410,  6615,  8820, 11025, 13230, 15435,
            17640, 19845])
 
@@ -418,7 +415,7 @@ def samples_to_time(samples, sr=48000):
     --------
     Get timestamps corresponding to every 512 samples
 
-    >>> librosa.samples_to_time(np.arange(0, 48000, 512))
+    >> librosa.samples_to_time(np.arange(0, 48000, 512))
     array([ 0.   ,  0.023,  0.046,  0.07 ,  0.093,  0.116,  0.139,
             0.163,  0.186,  0.209,  0.232,  0.255,  0.279,  0.302,
             0.325,  0.348,  0.372,  0.395,  0.418,  0.441,  0.464,
@@ -436,14 +433,14 @@ def note_to_hz(note, **kwargs):
 
     Examples
     --------
-    >>> # Get the frequency of a note
-    >>> librosa.note_to_hz('C')
+    >> # Get the frequency of a note
+    >> librosa.note_to_hz('C')
     array([ 16.352])
-    >>> # Or multiple notes
-    >>> librosa.note_to_hz(['A3', 'A4', 'A5'])
+    >> # Or multiple notes
+    >> librosa.note_to_hz(['A3', 'A4', 'A5'])
     array([ 220.,  440.,  880.])
-    >>> # Or notes with tuning deviations
-    >>> librosa.note_to_hz('C2-32', round_midi=False)
+    >> # Or notes with tuning deviations
+    >> librosa.note_to_hz('C2-32', round_midi=False)
     array([ 64.209])
 
     Parameters
@@ -503,18 +500,18 @@ def note_to_midi(note, round_midi=True):
 
     Examples
     --------
-    >>> librosa.note_to_midi('C')
+    >> librosa.note_to_midi('C')
     12
-    >>> librosa.note_to_midi('C#3')
+    >> librosa.note_to_midi('C#3')
     49
-    >>> librosa.note_to_midi('f4')
+    >> librosa.note_to_midi('f4')
     65
-    >>> librosa.note_to_midi('Bb-1')
+    >> librosa.note_to_midi('Bb-1')
     10
-    >>> librosa.note_to_midi('A!8')
+    >> librosa.note_to_midi('A!8')
     116
-    >>> # Lists of notes also work
-    >>> librosa.note_to_midi(['C', 'E', 'G'])
+    >> # Lists of notes also work
+    >> librosa.note_to_midi(['C', 'E', 'G'])
     array([12, 16, 19])
 
     '''
@@ -565,17 +562,17 @@ def midi_to_note(midi, octave=True, cents=False):
 
     Examples
     --------
-    >>> librosa.midi_to_note(0)
+    >> librosa.midi_to_note(0)
     'C-1'
-    >>> librosa.midi_to_note(37)
+    >> librosa.midi_to_note(37)
     'C#2'
-    >>> librosa.midi_to_note(-2)
+    >> librosa.midi_to_note(-2)
     'A#-2'
-    >>> librosa.midi_to_note(104.7)
+    >> librosa.midi_to_note(104.7)
     'A7'
-    >>> librosa.midi_to_note(104.7, cents=True)
+    >> librosa.midi_to_note(104.7, cents=True)
     'A7-30'
-    >>> librosa.midi_to_note(list(range(12, 24)))
+    >> librosa.midi_to_note(list(range(12, 24)))
     ['C0', 'C#0', 'D0', 'D#0', 'E0', 'F0', 'F#0', 'G0', 'G#0', 'A0', 'A#0', 'B0']
 
     Parameters
@@ -635,10 +632,10 @@ def midi_to_hz(notes):
 
     Examples
     --------
-    >>> librosa.midi_to_hz(36)
+    >> librosa.midi_to_hz(36)
     array([ 65.406])
 
-    >>> librosa.midi_to_hz(np.arange(36, 48))
+    >> librosa.midi_to_hz(np.arange(36, 48))
     array([  65.406,   69.296,   73.416,   77.782,   82.407,
              87.307,   92.499,   97.999,  103.826,  110.   ,
             116.541,  123.471])
@@ -667,9 +664,9 @@ def hz_to_midi(frequencies):
 
     Examples
     --------
-    >>> librosa.hz_to_midi(60)
+    >> librosa.hz_to_midi(60)
     array([ 34.506])
-    >>> librosa.hz_to_midi([110, 220, 440])
+    >> librosa.hz_to_midi([110, 220, 440])
     array([ 45.,  57.,  69.])
 
     Parameters
@@ -722,17 +719,17 @@ def hz_to_note(frequencies, **kwargs):
     --------
     Get a single note name for a frequency
 
-    >>> librosa.hz_to_note(440.0)
+    >> librosa.hz_to_note(440.0)
     ['A5']
 
     Get multiple notes with cent deviation
 
-    >>> librosa.hz_to_note([32, 64], cents=True)
+    >> librosa.hz_to_note([32, 64], cents=True)
     ['C1-38', 'C2-38']
 
     Get multiple notes, but suppress octave labels
 
-    >>> librosa.hz_to_note(440.0 * (2.0 ** np.linspace(0, 1, 12)),
+    >> librosa.hz_to_note(440.0 * (2.0 ** np.linspace(0, 1, 12)),
     ...                    octave=False)
     ['A', 'A#', 'B', 'C', 'C#', 'D', 'E', 'F', 'F#', 'G', 'G#', 'A']
 
@@ -745,9 +742,9 @@ def hz_to_mel(frequencies, htk=False):
 
     Examples
     --------
-    >>> librosa.hz_to_mel(60)
+    >> librosa.hz_to_mel(60)
     array([ 0.9])
-    >>> librosa.hz_to_mel([110, 220, 440])
+    >> librosa.hz_to_mel([110, 220, 440])
     array([ 1.65,  3.3 ,  6.6 ])
 
     Parameters
@@ -800,10 +797,10 @@ def mel_to_hz(mels, htk=False):
 
     Examples
     --------
-    >>> librosa.mel_to_hz(3)
+    >> librosa.mel_to_hz(3)
     array([ 200.])
 
-    >>> librosa.mel_to_hz([1,2,3,4,5])
+    >> librosa.mel_to_hz([1,2,3,4,5])
     array([  66.667,  133.333,  200.   ,  266.667,  333.333])
 
     Parameters
@@ -854,9 +851,9 @@ def hz_to_octs(frequencies, A440=440.0):
 
     Examples
     --------
-    >>> librosa.hz_to_octs(440.0)
+    >> librosa.hz_to_octs(440.0)
     array([ 4.])
-    >>> librosa.hz_to_octs([32, 64, 128, 256])
+    >> librosa.hz_to_octs([32, 64, 128, 256])
     array([ 0.219,  1.219,  2.219,  3.219])
 
     Parameters
@@ -885,9 +882,9 @@ def octs_to_hz(octs, A440=440.0):
 
     Examples
     --------
-    >>> librosa.octs_to_hz(1)
+    >> librosa.octs_to_hz(1)
     array([ 55.])
-    >>> librosa.octs_to_hz([-2, -1, 0, 1, 2])
+    >> librosa.octs_to_hz([-2, -1, 0, 1, 2])
     array([   6.875,   13.75 ,   27.5  ,   55.   ,  110.   ])
 
     Parameters
@@ -929,7 +926,7 @@ def fft_frequencies(sr=48000, n_fft=2048):
 
     Examples
     --------
-    >>> librosa.fft_frequencies(sr=48000, n_fft=16)
+    >> librosa.fft_frequencies(sr=48000, n_fft=16)
     array([     0.   ,   1378.125,   2756.25 ,   4134.375,
              5512.5  ,   6890.625,   8268.75 ,   9646.875,  11025.   ])
 
@@ -946,8 +943,8 @@ def cqt_frequencies(n_bins, fmin, bins_per_octave=12, tuning=0.0):
 
     Examples
     --------
-    >>> # Get the CQT frequencies for 24 notes, starting at C2
-    >>> librosa.cqt_frequencies(24, fmin=librosa.note_to_hz('C2'))
+    >> # Get the CQT frequencies for 24 notes, starting at C2
+    >> librosa.cqt_frequencies(24, fmin=librosa.note_to_hz('C2'))
     array([  65.406,   69.296,   73.416,   77.782,   82.407,   87.307,
              92.499,   97.999,  103.826,  110.   ,  116.541,  123.471,
             130.813,  138.591,  146.832,  155.563,  164.814,  174.614,
@@ -1004,7 +1001,7 @@ def mel_frequencies(n_mels=128, fmin=0.0, fmax=11025.0, htk=False):
 
     Examples
     --------
-    >>> librosa.mel_frequencies(n_mels=40)
+    >> librosa.mel_frequencies(n_mels=40)
     array([     0.   ,     85.317,    170.635,    255.952,
               341.269,    426.586,    511.904,    597.221,
               682.538,    767.855,    853.173,    938.49 ,
@@ -1053,7 +1050,7 @@ def tempo_frequencies(n_bins, hop_length=512, sr=48000):
     --------
     Get the tempo frequencies corresponding to a 384-bin (8-second) tempogram
 
-    >>> librosa.tempo_frequencies(384)
+    >> librosa.tempo_frequencies(384)
     array([      inf,  2583.984,  1291.992, ...,     6.782,
                6.764,     6.747])
     '''
@@ -1094,13 +1091,13 @@ def A_weighting(frequencies, min_db=-80.0):     # pylint: disable=invalid-name
 
     Get the A-weighting for CQT frequencies
 
-    >>> import matplotlib.pyplot as plt
-    >>> freqs = librosa.cqt_frequencies(108, librosa.note_to_hz('C1'))
-    >>> aw = librosa.A_weighting(freqs)
-    >>> plt.plot(freqs, aw)
-    >>> plt.xlabel('Frequency (Hz)')
-    >>> plt.ylabel('Weighting (log10)')
-    >>> plt.title('A-Weighting of CQT frequencies')
+    >> import matplotlib.pyplot as plt
+    >> freqs = librosa.cqt_frequencies(108, librosa.note_to_hz('C1'))
+    >> aw = librosa.A_weighting(freqs)
+    >> plt.plot(freqs, aw)
+    >> plt.xlabel('Frequency (Hz)')
+    >> plt.ylabel('Weighting (log10)')
+    >> plt.title('A-Weighting of CQT frequencies')
 
     '''
 

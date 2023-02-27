@@ -18,13 +18,15 @@
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
+import os
 import sys
 import numpy as np
 import scipy as sp
 
 
-import xodmaSetRootDir as xdir
-sys.path.insert(0, xdir.rootDir+'audio/xodma')
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+sys.path.insert(0, rootDir+'/xodma/')
 
 from xodmaAudioTools import resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
@@ -57,17 +59,17 @@ def pv1(D, rate, hop_length=None):
 
     Examples
     --------
-    >>> # Play at double speed
-    >>> y, sr   = librosa.load(librosa.util.example_audio_file())
-    >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
-    >>> D_fast  = librosa.phase_vocoder(D, 2.0, hop_length=512)
-    >>> y_fast  = librosa.istft(D_fast, hop_length=512)
-
-    >>> # Or play at 1/3 speed
-    >>> y, sr   = librosa.load(librosa.util.example_audio_file())
-    >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
-    >>> D_slow  = librosa.phase_vocoder(D, 1./3, hop_length=512)
-    >>> y_slow  = librosa.istft(D_slow, hop_length=512)
+    # >>> # Play at double speed
+    # >>> y, sr   = librosa.load(librosa.util.example_audio_file())
+    # >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
+    # >>> D_fast  = librosa.phase_vocoder(D, 2.0, hop_length=512)
+    # >>> y_fast  = librosa.istft(D_fast, hop_length=512)
+    #
+    # >>> # Or play at 1/3 speed
+    # >>> y, sr   = librosa.load(librosa.util.example_audio_file())
+    # >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
+    # >>> D_slow  = librosa.phase_vocoder(D, 1./3, hop_length=512)
+    # >>> y_slow  = librosa.istft(D_slow, hop_length=512)
 
     Parameters
     ----------
@@ -133,11 +135,8 @@ def pv1(D, rate, hop_length=None):
     return d_stretch
 
 
-
-    
-    
 def pvTimeStretch(y, rate):
-    '''Time-stretch an audio series by a fixed rate.
+    """Time-stretch an audio series by a fixed rate.
 
 
     Parameters
@@ -165,14 +164,14 @@ def pvTimeStretch(y, rate):
     --------
     Compress to be twice as fast
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> y_fast = librosa.effects.time_stretch(y, 2.0)
+    >> y, sr = librosa.load(librosa.util.example_audio_file())
+    > y_fast = librosa.effects.time_stretch(y, 2.0)
 
     Or half the original speed
 
-    >>> y_slow = librosa.effects.time_stretch(y, 0.5)
+    >> y_slow = librosa.effects.time_stretch(y, 0.5)
 
-    '''
+    """
 
     if rate <= 0:
         print('\nrate must be a positive number')
@@ -191,8 +190,7 @@ def pvTimeStretch(y, rate):
 
 
 def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
-    '''Pitch-shift the waveform by `n_steps` half-steps.
-
+    """Pitch-shift the waveform by `n_steps` half-steps.
 
     Parameters
     ----------
@@ -225,18 +223,18 @@ def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
     --------
     Shift up by a major third (four half-steps)
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> y_third = librosa.effects.pitch_shift(y, sr, n_steps=4)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> y_third = librosa.effects.pitch_shift(y, sr, n_steps=4)
 
     Shift down by a tritone (six half-steps)
 
-    >>> y_tritone = librosa.effects.pitch_shift(y, sr, n_steps=-6)
+    # >>> y_tritone = librosa.effects.pitch_shift(y, sr, n_steps=-6)
 
     Shift up by 3 quarter-tones
 
-    >>> y_three_qt = librosa.effects.pitch_shift(y, sr, n_steps=3,
+    # >>> y_three_qt = librosa.effects.pitch_shift(y, sr, n_steps=3,
     ...                                          bins_per_octave=24)
-    '''
+    """
 
     if bins_per_octave < 1 or not np.issubdtype(type(bins_per_octave), np.int):
         sys.exit('ERROR: func pitch_shift - bins_per_octave must be a positive integer.')
@@ -250,19 +248,14 @@ def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
     return fix_length(y_shift, len(y))
 
 
-
-
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
-
-
 
 
 # reference C code
 
-
-#int pva(float *input, float *window, float *output, 
+# int pva(float *input, float *window, float *output,
 #        int input_size, int fftsize, int hopsize, float sr){
 #
 #int posin, posout, i, k, mod;

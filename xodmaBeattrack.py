@@ -35,10 +35,10 @@ from xodmaParameterError import ParameterError
 from cache import cache
 
 
-ParameterError
+from xodmaSpectralUtil import frames_to_samples, frames_to_time
+from xodmaMiscUtil import fix_frames, match_events, sync
 
-frames_to_samples
-frames_to_time
+
 
 onset_strength
 
