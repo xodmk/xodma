@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 
 currentDir = os.getcwd()
 rootDir = os.path.dirname(currentDir)
-sys.path.insert(0, rootDir+'/xodma/')
+sys.path.insert(0, rootDir+'/xodma')
 
 from xodmaSpectralUtil import frames_to_samples, frames_to_time
 from xodmaMiscUtil import fix_frames, match_events, sync
@@ -45,12 +45,14 @@ import xodPlotUtil as xodplt
 import pdb
 
 
-__all__ = ['get_peak_regions',
-           'detectOnset',
+__all__ = ['detectOnset',
            'onset_detect',
            'onset_strength',
            'onset_strength_multi',
-           'onset_backtrack']
+           'onset_backtrack',
+           'get_peak_regions',
+           'getOnsetSampleSegments',
+           'getOnsetTimeSegments']
 
 
 # // *---------------------------------------------------------------------* //
@@ -436,331 +438,295 @@ def onset_detect(y=None, sr=48000, onset_envelope=None, hop_length=512,
 # // *---------------------------------------------------------------------* //
 # // *---------------------------------------------------------------------* //
 
-def onset_strength(y=None, sr=48000, S=None, lag=1, max_size=1, detrend=False,
-                   center=True, feature=None, aggregate=None, **kwargs):
+def onset_strength(
+    y=None,
+    sr=22050,
+    S=None,
+    lag=1,
+    max_size=1,
+    detrend=False,
+    center=True,
+    feature=None,
+    aggregate=None,
+    **kwargs
+) -> np.ndarray:
     """Compute a spectral flux onset strength envelope.
-
-    Onset strength at time `t` is determined by:
-
-    `mean_f max(0, S[f, t] - ref_S[f, t - lag])`
-
-    where `ref_S` is `S` after local max filtering along the frequency
-    axis [1]_.
-
-    By default, if a time series `y` is provided, S will be the
+    Onset strength at time ``t`` is determined by::
+        mean_f max(0, S[f, t] - ref[f, t - lag])
+    where ``ref`` is ``S`` after local max filtering along the frequency
+    axis [#]_.
+    By default, if a time series ``y`` is provided, S will be the
     log-power Mel spectrogram.
-
-    .. [1] Böck, Sebastian, and Gerhard Widmer.
+    .. [#] Böck, Sebastian, and Gerhard Widmer.
            "Maximum filter vibrato suppression for onset detection."
            16th International Conference on Digital Audio Effects,
            Maynooth, Ireland. 2013.
-
     Parameters
     ----------
-    y        : np.ndarray [shape=(n,)]
-        audio time-series
-
-    sr       : number > 0 [scalar]
-        sampling rate of `y`
-
-    S        : np.ndarray [shape=(d, m)]
+    y : np.ndarray [shape=(..., n)]
+        audio time-series. Multi-channel is supported.
+    sr : number > 0 [scalar]
+        sampling rate of ``y``
+    S : np.ndarray [shape=(..., d, m)]
         pre-computed (log-power) spectrogram
-
-    lag      : int > 0
+    lag : int > 0
         time lag for computing differences
-
     max_size : int > 0
         size (in frequency bins) of the local max filter.
         set to `1` to disable filtering.
-
     detrend : bool [scalar]
         Filter the onset strength to remove the DC component
-
     center : bool [scalar]
-        Shift the onset function by `n_fft / (2 * hop_length)` frames
-
+        Shift the onset function by ``n_fft // (2 * hop_length)`` frames.
+        This corresponds to using a centered frame analysis in the short-time Fourier
+        transform.
     feature : function
         Function for computing time-series features, eg, scaled spectrograms.
-        By default, uses `librosa.feature.melspectrogram` with `fmax=11025.0`
-
+        By default, uses `librosa.feature.melspectrogram` with ``fmax=sr/2``
     aggregate : function
         Aggregation function to use when combining onsets
         at different frequency bins.
-
         Default: `np.mean`
-
-    kwargs : additional keyword arguments
-        Additional parameters to `feature()`, if `S` is not provided.
-
-
+    **kwargs : additional keyword arguments
+        Additional parameters to ``feature()``, if ``S`` is not provided.
     Returns
     -------
-    onset_envelope   : np.ndarray [shape=(m,)]
-        vector containing the onset strength envelope
-
-
+    onset_envelope : np.ndarray [shape=(..., m,)]
+        vector containing the onset strength envelope.
+        If the input contains multiple channels, then onset envelope is computed for each channel.
     Raises
     ------
     ParameterError
-        if neither `(y, sr)` nor `S` are provided
-
-        or if `lag` or `max_size` are not positive integers
-
-
+        if neither ``(y, sr)`` nor ``S`` are provided
+        or if ``lag`` or ``max_size`` are not positive integers
     See Also
     --------
     onset_detect
     onset_strength_multi
-
-
     Examples
     --------
     First, load some audio and plot the spectrogram
-
-    >> import matplotlib.pyplot as plt
-    >> y, sr = librosa.load(librosa.util.example_audio_file(),
-    ...                      duration=10.0)
-    >> D = np.abs(librosa.stft(y))
-    >> times = librosa.frames_to_time(np.arange(D.shape[1]))
-    >> plt.figure()
-    >> ax1 = plt.subplot(2, 1, 1)
-    >> librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
-    ...                          y_axis='log', x_axis='time')
-    >> plt.title('Power spectrogram')
-
-    Construct a standard onset function
-
-    >> onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-    >> plt.subplot(2, 1, 2, sharex=ax1)
-    >> plt.plot(times, 2 + onset_env / onset_env.max(), alpha=0.8,
-    ...          label='Mean (mel)')
-
-
-    Median aggregation, and custom mel options
-
-    >> onset_env = librosa.onset.onset_strength(y=y, sr=sr,
-    ...                                          aggregate=np.median,
-    ...                                          fmax=8000, n_mels=256)
-    >> plt.plot(times, 1 + onset_env / onset_env.max(), alpha=0.8,
-    ...          label='Median (custom mel)')
-
-
-    Constant-Q spectrogram instead of Mel
-
-    >> onset_env = librosa.onset.onset_strength(y=y, sr=sr,
-    ...                                          feature=librosa.cqt)
-    >> plt.plot(times, onset_env / onset_env.max(), alpha=0.8,
-    ...          label='Mean (CQT)')
-    >> plt.legend(frameon=True, framealpha=0.75)
-    >> plt.ylabel('Normalized strength')
-    >> plt.yticks([])
-    >> plt.axis('tight')
-    >> plt.tight_layout()
-
+    # >>> import matplotlib.pyplot as plt
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'), duration=3)
+    # >>> D = np.abs(librosa.stft(y))
+    # >>> times = librosa.times_like(D)
+    # >>> fig, ax = plt.subplots(nrows=2, sharex=True)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
+    # ...                          y_axis='log', x_axis='time', ax=ax[0])
+    # >>> ax[0].set(title='Power spectrogram')
+    # >>> ax[0].label_outer()
+    # Construct a standard onset function
+    # >>> onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    # >>> ax[1].plot(times, 2 + onset_env / onset_env.max(), alpha=0.8,
+    # ...            label='Mean (mel)')
+    # Median aggregation, and custom mel options
+    # >>> onset_env = librosa.onset.onset_strength(y=y, sr=sr,
+    # ...                                          aggregate=np.median,
+    # ...                                          fmax=8000, n_mels=256)
+    # >>> ax[1].plot(times, 1 + onset_env / onset_env.max(), alpha=0.8,
+    # ...            label='Median (custom mel)')
+    # Constant-Q spectrogram instead of Mel
+    # >>> C = np.abs(librosa.cqt(y=y, sr=sr))
+    # >>> onset_env = librosa.onset.onset_strength(sr=sr, S=librosa.amplitude_to_db(C, ref=np.max))
+    # >>> ax[1].plot(times, onset_env / onset_env.max(), alpha=0.8,
+    # ...          label='Mean (CQT)')
+    # >>> ax[1].legend()
+    # >>> ax[1].set(ylabel='Normalized strength', yticks=[])
     """
 
-    odf_all = onset_strength_multi(y=y,
-                                   sr=sr,
-                                   S=S,
-                                   lag=lag,
-                                   max_size=max_size,
-                                   detrend=detrend,
-                                   center=center,
-                                   feature=feature,
-                                   aggregate=aggregate,
-                                   channels=None,
-                                   **kwargs)
+    if aggregate is False:
+        raise ParameterError(
+            f"aggregate parameter cannot be False when computing full-spectrum onset strength."
+        )
 
-    return odf_all[0]
+    odf_all = onset_strength_multi(
+        y=y,
+        sr=sr,
+        S=S,
+        lag=lag,
+        max_size=max_size,
+        detrend=detrend,
+        center=center,
+        feature=feature,
+        aggregate=aggregate,
+        channels=None,
+        **kwargs,
+    )
+
+    return odf_all[..., 0, :]
 
 
-def onset_backtrack(events, energy):
-    '''Backtrack detected onset events to the nearest preceding local
+def onset_backtrack(events: np.ndarray, energy: np.ndarray) -> np.ndarray:
+    """Backtrack detected onset events to the nearest preceding local
     minimum of an energy function.
-
     This function can be used to roll back the timing of detected onsets
     from a detected peak amplitude to the preceding minimum.
-
     This is most useful when using onsets to determine slice points for
-    segmentation, as described by [1]_.
-
-    .. [1] Jehan, Tristan.
+    segmentation, as described by [#]_.
+    .. [#] Jehan, Tristan.
            "Creating music by listening"
            Doctoral dissertation
            Massachusetts Institute of Technology, 2005.
-
     Parameters
     ----------
     events : np.ndarray, dtype=int
         List of onset event frame indices, as computed by `onset_detect`
-
     energy : np.ndarray, shape=(m,)
         An energy function
-
     Returns
     -------
     events_backtracked : np.ndarray, shape=events.shape
-        The input events matched to nearest preceding minima of `energy`.
-
+        The input events matched to nearest preceding minima of ``energy``.
     Examples
     --------
-    >> oenv = onset_strength(y=y, sr=sr)
-    
-    >> # Detect events without backtracking
-    >> onset_raw = onset_detect(onset_envelope=oenv, backtrack=False)
-    
-    >> # Backtrack the events using the onset envelope
-    >> onset_bt = librosa.onset.onset_backtrack(onset_raw, oenv)
-    
-    >> # Backtrack the events using the RMS values
-    >> rms = librosa.feature.rms(S=np.abs(librosa.stft(y=y)))
-    >> onset_bt_rms = librosa.onset.onset_backtrack(onset_raw, rms[0])
-
-    >> # Plot the results
-    >> import matplotlib.pyplot as plt
-    >> plt.figure()
-    >> plt.subplot(2,1,1)
-    >> plt.plot(oenv, label='Onset strength')
-    >> plt.vlines(onset_raw, 0, oenv.max(), label='Raw onsets')
-    >> plt.vlines(onset_bt, 0, oenv.max(), label='Backtracked', color='r')
-    >> plt.legend(frameon=True, framealpha=0.75)
-    >> plt.subplot(2,1,2)
-    >> plt.plot(rms[0], label='RMS')
-    >> plt.vlines(onset_bt_rms, 0, rms.max(), label='Backtracked (RMS)', color='r')
-    >> plt.legend(frameon=True, framealpha=0.75)
-    >> plt.show()
-    '''
+    Backtrack the events using the onset envelope
+    >>> y, sr = librosa.load(librosa.ex('trumpet'), duration=3)
+    >>> oenv = librosa.onset.onset_strength(y=y, sr=sr)
+    >>> times = librosa.times_like(oenv)
+    >>> # Detect events without backtracking
+    >>> onset_raw = librosa.onset.onset_detect(onset_envelope=oenv,
+    ...                                        backtrack=False)
+    >>> onset_bt = librosa.onset.onset_backtrack(onset_raw, oenv)
+    Backtrack the events using the RMS values
+    >>> S = np.abs(librosa.stft(y=y))
+    >>> rms = librosa.feature.rms(S=S)
+    >>> onset_bt_rms = librosa.onset.onset_backtrack(onset_raw, rms[0])
+    Plot the results
+    >>> import matplotlib.pyplot as plt
+    >>> fig, ax = plt.subplots(nrows=3, sharex=True)
+    >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
+    ...                          y_axis='log', x_axis='time', ax=ax[0])
+    >>> ax[0].label_outer()
+    >>> ax[1].plot(times, oenv, label='Onset strength')
+    >>> ax[1].vlines(librosa.frames_to_time(onset_raw), 0, oenv.max(), label='Raw onsets')
+    >>> ax[1].vlines(librosa.frames_to_time(onset_bt), 0, oenv.max(), label='Backtracked', color='r')
+    >>> ax[1].legend()
+    >>> ax[1].label_outer()
+    >>> ax[2].plot(times, rms[0], label='RMS')
+    >>> ax[2].vlines(librosa.frames_to_time(onset_bt_rms), 0, rms.max(), label='Backtracked (RMS)', color='r')
+    >>> ax[2].legend()
+    """
 
     # Find points where energy is non-increasing
     # all points:  energy[i] <= energy[i-1]
     # tail points: energy[i] < energy[i+1]
-    minima = np.flatnonzero((energy[1:-1] <= energy[:-2]) &
-                            (energy[1:-1] < energy[2:]))
+    minima = np.flatnonzero((energy[1:-1] <= energy[:-2]) & (energy[1:-1] < energy[2:]))
 
     # Pad on a 0, just in case we have onsets with no preceding minimum
     # Shift by one to account for slicing in minima detection
     minima = fix_frames(1 + minima, x_min=0)
 
     # Only match going left from the detected events
-    return minima[match_events(events, minima, right=False)]
+    results: np.ndarray = minima[match_events(events, minima, right=False)]
+    return results
 
 
 @cache(level=30)
-def onset_strength_multi(y=None, sr=48000, S=None, n_fft=2048, hop_length=512, lag=1,
-                         max_size=1, detrend=False, center=True, feature=None,
-                         aggregate=None, channels=None, **kwargs):
+def onset_strength_multi(
+    y=None,
+    sr=22050,
+    S=None,
+    n_fft=2048,
+    hop_length=512,
+    lag=1,
+    max_size=1,
+    detrend=False,
+    center=True,
+    feature=None,
+    aggregate=None,
+    channels=None,
+    **kwargs
+) -> np.ndarray:
     """Compute a spectral flux onset strength envelope across multiple channels.
-
-    Onset strength for channel `i` at time `t` is determined by:
-
-    `mean_{f in channels[i]} max(0, S[f, t+1] - S[f, t])`
-
-
+    Onset strength for channel ``i`` at time ``t`` is determined by::
+        mean_{f in channels[i]} max(0, S[f, t+1] - S[f, t])
     Parameters
     ----------
-    y        : np.ndarray [shape=(n,)]
-        audio time-series
-
-    sr       : number > 0 [scalar]
-        sampling rate of `y`
-
-    S        : np.ndarray [shape=(d, m)]
+    y : np.ndarray [shape=(..., n,)]
+        audio time-series. Multi-channel is supported.
+    sr : number > 0 [scalar]
+        sampling rate of ``y``
+    S : np.ndarray [shape=(..., d, m)]
         pre-computed (log-power) spectrogram
-
-    n_fft : int > 0 [scaler]
-        FFT window size for use in ``feature()`` if ``s`` is not provided
-
-    hop_length : int > 0 [scaler]
-        hop length for use in ``feature()`` if ``s`` is not provided
-
-    lag      : int > 0
+    n_fft : int > 0 [scalar]
+        FFT window size for use in ``feature()`` if ``S`` is not provided.
+    hop_length : int > 0 [scalar]
+        hop length for use in ``feature()`` if ``S`` is not provided.
+    lag : int > 0
         time lag for computing differences
-
     max_size : int > 0
         size (in frequency bins) of the local max filter.
         set to `1` to disable filtering.
-
+    ref : None or np.ndarray [shape=(d, m)]
+        An optional pre-computed reference spectrum, of the same shape as ``S``.
+        If not provided, it will be computed from ``S``.
+        If provided, it will override any local max filtering governed by ``max_size``.
     detrend : bool [scalar]
         Filter the onset strength to remove the DC component
-
     center : bool [scalar]
-        Shift the onset function by `n_fft / (2 * hop_length)` frames
-
+        Shift the onset function by ``n_fft // (2 * hop_length)`` frames.
+        This corresponds to using a centered frame analysis in the short-time Fourier
+        transform.
     feature : function
         Function for computing time-series features, eg, scaled spectrograms.
-        By default, uses `librosa.feature.melspectrogram` with `fmax=11025.0`
-
-    aggregate : function
+        By default, uses `librosa.feature.melspectrogram` with ``fmax=sr/2``
+        Must support arguments: ``y, sr, n_fft, hop_length``
+    aggregate : function or False
         Aggregation function to use when combining onsets
         at different frequency bins.
-
+        If ``False``, then no aggregation is performed.
         Default: `np.mean`
-
     channels : list or None
         Array of channel boundaries or slice objects.
         If `None`, then a single channel is generated to span all bands.
-
-    kwargs : additional keyword arguments
-        Additional parameters to `feature()`, if `S` is not provided.
-
-
+    **kwargs : additional keyword arguments
+        Additional parameters to ``feature()``, if ``S`` is not provided.
     Returns
     -------
-    onset_envelope   : np.ndarray [shape=(n_channels, m)]
+    onset_envelope : np.ndarray [shape=(..., n_channels, m)]
         array containing the onset strength envelope for each specified channel
-
-
     Raises
     ------
     ParameterError
-        if neither `(y, sr)` nor `S` are provided
-
-
+        if neither ``(y, sr)`` nor ``S`` are provided
     See Also
     --------
     onset_strength
-
     Notes
     -----
     This function caches at level 30.
-
     Examples
     --------
     First, load some audio and plot the spectrogram
-
-    >> import matplotlib.pyplot as plt
-    >> y, sr = librosa.load(librosa.util.example_audio_file(),
-    ...                      duration=10.0)
-    >> D = np.abs(librosa.stft(y))
-    >> plt.figure()
-    >> plt.subplot(2, 1, 1)
-    >> librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
-    ...                          y_axis='log')
-    >> plt.title('Power spectrogram')
-
-    Construct a standard onset function over four sub-bands
-
-    >> onset_subbands = librosa.onset.onset_strength_multi(y=y, sr=sr,
-    ...                                                     channels=[0, 32, 64, 96, 128])
-    >> plt.subplot(2, 1, 2)
-    >> librosa.display.specshow(onset_subbands, x_axis='time')
-    >> plt.ylabel('Sub-bands')
-    >> plt.title('Sub-band onset strength')
-
+    # >>> import matplotlib.pyplot as plt
+    # >>> y, sr = librosa.load(librosa.ex('choice'), duration=5)
+    # >>> D = np.abs(librosa.stft(y))
+    # >>> fig, ax = plt.subplots(nrows=2, sharex=True)
+    # >>> img1 = librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
+    # ...                          y_axis='log', x_axis='time', ax=ax[0])
+    # >>> ax[0].set(title='Power spectrogram')
+    # >>> ax[0].label_outer()
+    # >>> fig.colorbar(img1, ax=[ax[0]], format="%+2.f dB")
+    # Construct a standard onset function over four sub-bands
+    # >>> onset_subbands = librosa.onset.onset_strength_multi(y=y, sr=sr,
+    # ...                                                     channels=[0, 32, 64, 96, 128])
+    # >>> img2 = librosa.display.specshow(onset_subbands, x_axis='time', ax=ax[1])
+    # >>> ax[1].set(ylabel='Sub-bands', title='Sub-band onset strength')
+    # >>> fig.colorbar(img2, ax=[ax[1]])
     """
 
     if feature is None:
         feature = melspectrogram
-        kwargs.setdefault('fmax', 0.5 * sr)
+        kwargs.setdefault("fmax", 0.5 * sr)
 
     if aggregate is None:
         aggregate = np.mean
 
     if lag < 1 or not isinstance(lag, (int, np.integer)):
-        raise ParameterError('lag must be a positive integer')
+        raise ParameterError(f"lag={lag} must be a positive integer")
 
     if max_size < 1 or not isinstance(max_size, (int, np.integer)):
-        raise ParameterError('max_size must be a positive integer')
+        raise ParameterError(f"max_size={max_size} must be a positive integer")
 
     # First, compute mel spectrogram
     if S is None:
@@ -769,11 +735,6 @@ def onset_strength_multi(y=None, sr=48000, S=None, n_fft=2048, hop_length=512, l
         # Convert to dBs
         S = power_to_db(S)
 
-    # Retrieve the n_fft and hop_length,
-    # or default values for onsets if not provided
-    n_fft = kwargs.get('n_fft', 2048)
-    hop_length = kwargs.get('hop_length', 512)
-
     # Ensure that S is at least 2-d
     S = np.atleast_2d(S)
 
@@ -781,12 +742,12 @@ def onset_strength_multi(y=None, sr=48000, S=None, n_fft=2048, hop_length=512, l
     # Efficiency hack: skip filtering step and pass by reference
     # if max_size will produce a no-op.
     if max_size == 1:
-        ref_spec = S
+        ref = S
     else:
-        ref_spec = scipy.ndimage.maximum_filter1d(S, max_size, axis=0)
+        ref = scipy.ndimage.maximum_filter1d(S, max_size, axis=-2)
 
     # Compute difference to the reference, spaced by lag
-    onset_env = S[:, lag:] - ref_spec[:, :-lag]
+    onset_env = S[..., lag:] - ref[..., :-lag]
 
     # Discard negatives (decreasing amplitude)
     onset_env = np.maximum(0.0, onset_env)
@@ -798,7 +759,10 @@ def onset_strength_multi(y=None, sr=48000, S=None, n_fft=2048, hop_length=512, l
     else:
         pad = False
 
-    onset_env = sync(onset_env, channels, aggregate=aggregate, pad=pad, axis=-2)
+    if callable(aggregate):
+        onset_env = sync(
+            onset_env, channels, aggregate=aggregate, pad=pad, axis=-2
+        )
 
     # compensate for lag
     pad_width = lag
@@ -806,19 +770,197 @@ def onset_strength_multi(y=None, sr=48000, S=None, n_fft=2048, hop_length=512, l
         # Counter-act framing effects. Shift the onsets by n_fft / hop_length
         pad_width += n_fft // (2 * hop_length)
 
-    onset_env = np.pad(onset_env, ([0, 0], [int(pad_width), 0]),
-                       mode='constant')
+    padding = [(0, 0) for _ in onset_env.shape]
+    padding[-1] = (int(pad_width), 0)
+    onset_env = np.pad(onset_env, padding, mode="constant")
 
     # remove the DC component
     if detrend:
-        onset_env = scipy.signal.lfilter([1.0, -1.0], [1.0, -0.99],
-                                         onset_env, axis=-1)
+        onset_env = scipy.signal.lfilter([1.0, -1.0], [1.0, -0.99], onset_env, axis=-1)
 
     # Trim to match the input duration
     if center:
-        onset_env = onset_env[:, :S.shape[-1]]
+        onset_env = onset_env[..., : S.shape[-1]]
 
     return onset_env
+
+
+# @cache(level=30)
+# def onset_strength_multi(y=None, sr=48000, S=None, n_fft=2048, hop_length=512, lag=1,
+#                          max_size=1, detrend=False, center=True, feature=None,
+#                          aggregate=None, channels=None, **kwargs):
+#     """Compute a spectral flux onset strength envelope across multiple channels.
+#
+#     Onset strength for channel `i` at time `t` is determined by:
+#
+#     `mean_{f in channels[i]} max(0, S[f, t+1] - S[f, t])`
+#
+#
+#     Parameters
+#     ----------
+#     y        : np.ndarray [shape=(n,)]
+#         audio time-series
+#
+#     sr       : number > 0 [scalar]
+#         sampling rate of `y`
+#
+#     S        : np.ndarray [shape=(d, m)]
+#         pre-computed (log-power) spectrogram
+#
+#     n_fft : int > 0 [scaler]
+#         FFT window size for use in ``feature()`` if ``s`` is not provided
+#
+#     hop_length : int > 0 [scaler]
+#         hop length for use in ``feature()`` if ``s`` is not provided
+#
+#     lag      : int > 0
+#         time lag for computing differences
+#
+#     max_size : int > 0
+#         size (in frequency bins) of the local max filter.
+#         set to `1` to disable filtering.
+#
+#     detrend : bool [scalar]
+#         Filter the onset strength to remove the DC component
+#
+#     center : bool [scalar]
+#         Shift the onset function by `n_fft / (2 * hop_length)` frames
+#
+#     feature : function
+#         Function for computing time-series features, eg, scaled spectrograms.
+#         By default, uses `librosa.feature.melspectrogram` with `fmax=11025.0`
+#
+#     aggregate : function
+#         Aggregation function to use when combining onsets
+#         at different frequency bins.
+#
+#         Default: `np.mean`
+#
+#     channels : list or None
+#         Array of channel boundaries or slice objects.
+#         If `None`, then a single channel is generated to span all bands.
+#
+#     kwargs : additional keyword arguments
+#         Additional parameters to `feature()`, if `S` is not provided.
+#
+#
+#     Returns
+#     -------
+#     onset_envelope   : np.ndarray [shape=(n_channels, m)]
+#         array containing the onset strength envelope for each specified channel
+#
+#
+#     Raises
+#     ------
+#     ParameterError
+#         if neither `(y, sr)` nor `S` are provided
+#
+#
+#     See Also
+#     --------
+#     onset_strength
+#
+#     Notes
+#     -----
+#     This function caches at level 30.
+#
+#     Examples
+#     --------
+#     First, load some audio and plot the spectrogram
+#
+#     >> import matplotlib.pyplot as plt
+#     >> y, sr = librosa.load(librosa.util.example_audio_file(),
+#     ...                      duration=10.0)
+#     >> D = np.abs(librosa.stft(y))
+#     >> plt.figure()
+#     >> plt.subplot(2, 1, 1)
+#     >> librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
+#     ...                          y_axis='log')
+#     >> plt.title('Power spectrogram')
+#
+#     Construct a standard onset function over four sub-bands
+#
+#     >> onset_subbands = librosa.onset.onset_strength_multi(y=y, sr=sr,
+#     ...                                                     channels=[0, 32, 64, 96, 128])
+#     >> plt.subplot(2, 1, 2)
+#     >> librosa.display.specshow(onset_subbands, x_axis='time')
+#     >> plt.ylabel('Sub-bands')
+#     >> plt.title('Sub-band onset strength')
+#
+#     """
+#
+#     if feature is None:
+#         feature = melspectrogram
+#         kwargs.setdefault('fmax', 0.5 * sr)
+#
+#     if aggregate is None:
+#         aggregate = np.mean
+#
+#     if lag < 1 or not isinstance(lag, (int, np.integer)):
+#         raise ParameterError('lag must be a positive integer')
+#
+#     if max_size < 1 or not isinstance(max_size, (int, np.integer)):
+#         raise ParameterError('max_size must be a positive integer')
+#
+#     # First, compute mel spectrogram
+#     if S is None:
+#         S = np.abs(feature(y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, **kwargs))
+#
+#         # Convert to dBs
+#         S = power_to_db(S)
+#
+#     # Retrieve the n_fft and hop_length,
+#     # or default values for onsets if not provided
+#     n_fft = kwargs.get('n_fft', 2048)
+#     hop_length = kwargs.get('hop_length', 512)
+#
+#     # Ensure that S is at least 2-d
+#     S = np.atleast_2d(S)
+#
+#     # Compute the reference spectrogram.
+#     # Efficiency hack: skip filtering step and pass by reference
+#     # if max_size will produce a no-op.
+#     if max_size == 1:
+#         ref_spec = S
+#     else:
+#         ref_spec = scipy.ndimage.maximum_filter1d(S, max_size, axis=-2)
+#
+#     # Compute difference to the reference, spaced by lag
+#     onset_env = S[:, lag:] - ref_spec[:, :-lag]
+#
+#     # Discard negatives (decreasing amplitude)
+#     onset_env = np.maximum(0.0, onset_env)
+#
+#     # Aggregate within channels
+#     pad = True
+#     if channels is None:
+#         channels = [slice(None)]
+#     else:
+#         pad = False
+#
+#     if callable(aggregate):
+#         onset_env = sync(onset_env, channels, aggregate=aggregate, pad=pad, axis=-2)
+#
+#     # compensate for lag
+#     pad_width = lag
+#     if center:
+#         # Counter-act framing effects. Shift the onsets by n_fft / hop_length
+#         pad_width += n_fft // (2 * hop_length)
+#
+#     padding = [(0, 0) for _ in onset_env.shape]
+#     padding[-1] = (int(pad_width), 0)
+#     onset_env = np.pad(onset_env, padding, mode="constant")
+#
+#     # remove the DC component
+#     if detrend:
+#         onset_env = scipy.signal.lfilter([1.0, -1.0], [1.0, -0.99],
+#                                          onset_env, axis=-1)
+#
+#     # Trim to match the input duration
+#     if center:
+#         onset_env = onset_env[:, :S.shape[-1]]
+#
+#     return onset_env
 
 
 # // *---------------------------------------------------------------------* //

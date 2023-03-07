@@ -11,22 +11,22 @@
 #
 # XODMK Audio Tools - Spectral feature extraction functions
 #
-#       
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
-
+import os
 import sys
 import numpy as np
 import scipy
 import scipy.signal
 
 
-rootDir = '../../'
-sys.path.insert(0, rootDir+'audio/xodma')
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+sys.path.insert(0, rootDir+'/xodma')
 
 from xodmaMiscUtil import normalize
 from xodmaSpectralUtil import frame, fft_frequencies, get_window
@@ -35,11 +35,6 @@ from xodmaSpectralCQT import cqt, hybrid_cqt
 from xodmaPitchDetect import estimate_tuning
 from xodmaParameterError import ParameterError
 from xodmaAudioTools import valid_audio, zero_crossings, to_mono, autocorrelate
-
-#from odmkOnset import onset_strength -> causes error:
-# ImportError: cannot import name 'onset_strength'
-# ???WHY???
-
 
 
 __all__ = ['spectral_centroid',
@@ -60,7 +55,7 @@ __all__ = ['spectral_centroid',
 # -- Spectral features -- #
 def spectral_centroid(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
                       freq=None):
-    '''Compute the spectral centroid.
+    """Compute the spectral centroid.
 
     Each frame of a magnitude spectrogram is normalized and treated as a
     distribution over frequency bins, from which the mean (centroid) is
@@ -107,49 +102,47 @@ def spectral_centroid(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
     --------
     From time-series input:
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> cent = librosa.feature.spectral_centroid(y=y, sr=sr)
-    >>> cent
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> cent = librosa.feature.spectral_centroid(y=y, sr=sr)
+    # >>> cent
     array([[ 4382.894,   626.588, ...,  5037.07 ,  5413.398]])
 
     From spectrogram input:
 
-    >>> S, phase = librosa.magphase(librosa.stft(y=y))
-    >>> librosa.feature.spectral_centroid(S=S)
+    # >>> S, phase = librosa.magphase(librosa.stft(y=y))
+    # >>> librosa.feature.spectral_centroid(S=S)
     array([[ 4382.894,   626.588, ...,  5037.07 ,  5413.398]])
 
     Using variable bin center frequencies:
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> if_gram, D = librosa.ifgram(y)
-    >>> librosa.feature.spectral_centroid(S=np.abs(D), freq=if_gram)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> if_gram, D = librosa.ifgram(y)
+    # >>> librosa.feature.spectral_centroid(S=np.abs(D), freq=if_gram)
     array([[ 4420.719,   625.769, ...,  5011.86 ,  5221.492]])
 
     Plot the result
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2, 1, 1)
-    >>> plt.semilogy(cent.T, label='Spectral centroid')
-    >>> plt.ylabel('Hz')
-    >>> plt.xticks([])
-    >>> plt.xlim([0, cent.shape[-1]])
-    >>> plt.legend()
-    >>> plt.subplot(2, 1, 2)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
-    ...                          y_axis='log', x_axis='time')
-    >>> plt.title('log Power spectrogram')
-    >>> plt.tight_layout()
-    '''
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2, 1, 1)
+    # >>> plt.semilogy(cent.T, label='Spectral centroid')
+    # >>> plt.ylabel('Hz')
+    # >>> plt.xticks([])
+    # >>> plt.xlim([0, cent.shape[-1]])
+    # >>> plt.legend()
+    # >>> plt.subplot(2, 1, 2)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
+    # ...                          y_axis='log', x_axis='time')
+    # >>> plt.title('log Power spectrogram')
+    # >>> plt.tight_layout()
+    """
 
     S, n_fft = mag_spectrogram(y=y, S=S, n_fft=n_fft, hop_length=hop_length)
 
     if not np.isrealobj(S):
-        raise ParameterError('Spectral centroid is only defined '
-                             'with real-valued input')
+        raise ParameterError("Spectral centroid is only defined " "with real-valued input")
     elif np.any(S < 0):
-        raise ParameterError('Spectral centroid is only defined '
-                             'with non-negative energies')
+        raise ParameterError("Spectral centroid is only defined " "with non-negative energies")
 
     # Compute the center frequencies of each bin
     if freq is None:
@@ -165,7 +158,7 @@ def spectral_centroid(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
 def spectral_bandwidth(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
                        freq=None, centroid=None, norm=True, p=2):
-    '''Compute p'th-order spectral bandwidth:
+    """Compute p'th-order spectral bandwidth:
 
         (sum_k S[k] * (freq[k] - centroid)**p)**(1/p)
 
@@ -213,15 +206,15 @@ def spectral_bandwidth(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
     --------
     From time-series input
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> spec_bw = librosa.feature.spectral_bandwidth(y=y, sr=sr)
-    >>> spec_bw
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> spec_bw = librosa.feature.spectral_bandwidth(y=y, sr=sr)
+    # >>> spec_bw
     array([[ 3379.878,  1429.486, ...,  3235.214,  3080.148]])
 
     From spectrogram input
 
-    >>> S, phase = librosa.magphase(librosa.stft(y=y))
-    >>> librosa.feature.spectral_bandwidth(S=S)
+    # >>> S, phase = librosa.magphase(librosa.stft(y=y))
+    # >>> librosa.feature.spectral_bandwidth(S=S)
     array([[ 3379.878,  1429.486, ...,  3235.214,  3080.148]])
 
     Using variable bin center frequencies
@@ -232,21 +225,21 @@ def spectral_bandwidth(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
     Plot the result
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2, 1, 1)
-    >>> plt.semilogy(spec_bw.T, label='Spectral bandwidth')
-    >>> plt.ylabel('Hz')
-    >>> plt.xticks([])
-    >>> plt.xlim([0, spec_bw.shape[-1]])
-    >>> plt.legend()
-    >>> plt.subplot(2, 1, 2)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
-    ...                          y_axis='log', x_axis='time')
-    >>> plt.title('log Power spectrogram')
-    >>> plt.tight_layout()
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2, 1, 1)
+    # >>> plt.semilogy(spec_bw.T, label='Spectral bandwidth')
+    # >>> plt.ylabel('Hz')
+    # >>> plt.xticks([])
+    # >>> plt.xlim([0, spec_bw.shape[-1]])
+    # >>> plt.legend()
+    # >>> plt.subplot(2, 1, 2)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
+    # ...                          y_axis='log', x_axis='time')
+    # >>> plt.title('log Power spectrogram')
+    # >>> plt.tight_layout()
 
-    '''
+    """
 
     S, n_fft = mag_spectrogram(y=y, S=S, n_fft=n_fft, hop_length=hop_length)
 
@@ -282,7 +275,7 @@ def spectral_bandwidth(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 def spectral_contrast(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
                       freq=None, fmin=200.0, n_bands=6, quantile=0.02,
                       linear=False):
-    '''Compute spectral contrast [1]_
+    """Compute spectral contrast [1]_
 
     .. [1] Jiang, Dan-Ning, Lie Lu, Hong-Jiang Zhang, Jian-Hua Tao,
            and Lian-Hong Cai.
@@ -340,25 +333,25 @@ def spectral_contrast(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> S = np.abs(librosa.stft(y))
-    >>> contrast = librosa.feature.spectral_contrast(S=S, sr=sr)
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2, 1, 1)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(S,
-    ...                                                  ref=np.max),
-    ...                          y_axis='log')
-    >>> plt.colorbar(format='%+2.0f dB')
-    >>> plt.title('Power spectrogram')
-    >>> plt.subplot(2, 1, 2)
-    >>> librosa.display.specshow(contrast, x_axis='time')
-    >>> plt.colorbar()
-    >>> plt.ylabel('Frequency bands')
-    >>> plt.title('Spectral contrast')
-    >>> plt.tight_layout()
-    '''
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> S = np.abs(librosa.stft(y))
+    # >>> contrast = librosa.feature.spectral_contrast(S=S, sr=sr)
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2, 1, 1)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(S,
+    # ...                                                  ref=np.max),
+    # ...                          y_axis='log')
+    # >>> plt.colorbar(format='%+2.0f dB')
+    # >>> plt.title('Power spectrogram')
+    # >>> plt.subplot(2, 1, 2)
+    # >>> librosa.display.specshow(contrast, x_axis='time')
+    # >>> plt.colorbar()
+    # >>> plt.ylabel('Frequency bands')
+    # >>> plt.title('Spectral contrast')
+    # >>> plt.tight_layout()
+    """
 
     S, n_fft = mag_spectrogram(y=y, S=S, n_fft=n_fft, hop_length=hop_length)
 
@@ -424,7 +417,7 @@ def spectral_contrast(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
 def spectral_rolloff(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
                      freq=None, roll_percent=0.85):
-    '''Compute roll-off frequency
+    """Compute roll-off frequency
 
     Parameters
     ----------
@@ -463,37 +456,37 @@ def spectral_rolloff(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
     --------
     From time-series input
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
-    >>> rolloff
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
+    # >>> rolloff
     array([[ 8376.416,   968.994, ...,  8925.513,  9108.545]])
 
     From spectrogram input
 
-    >>> S, phase = librosa.magphase(librosa.stft(y))
-    >>> librosa.feature.spectral_rolloff(S=S, sr=sr)
+    # >>> S, phase = librosa.magphase(librosa.stft(y))
+    # >>> librosa.feature.spectral_rolloff(S=S, sr=sr)
     array([[ 8376.416,   968.994, ...,  8925.513,  9108.545]])
 
-    >>> # With a higher roll percentage:
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.95)
+    # >>> # With a higher roll percentage:
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.95)
     array([[ 10012.939,   3003.882, ...,  10034.473,  10077.539]])
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2, 1, 1)
-    >>> plt.semilogy(rolloff.T, label='Roll-off frequency')
-    >>> plt.ylabel('Hz')
-    >>> plt.xticks([])
-    >>> plt.xlim([0, rolloff.shape[-1]])
-    >>> plt.legend()
-    >>> plt.subplot(2, 1, 2)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
-    ...                          y_axis='log', x_axis='time')
-    >>> plt.title('log Power spectrogram')
-    >>> plt.tight_layout()
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2, 1, 1)
+    # >>> plt.semilogy(rolloff.T, label='Roll-off frequency')
+    # >>> plt.ylabel('Hz')
+    # >>> plt.xticks([])
+    # >>> plt.xlim([0, rolloff.shape[-1]])
+    # >>> plt.legend()
+    # >>> plt.subplot(2, 1, 2)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
+    # ...                          y_axis='log', x_axis='time')
+    # >>> plt.title('log Power spectrogram')
+    # >>> plt.tight_layout()
 
-    '''
+    """
 
     if not 0.0 < roll_percent < 1.0:
         raise ParameterError('roll_percent must lie in the range (0, 1)')
@@ -525,7 +518,7 @@ def spectral_rolloff(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
 
 def rmse(y=None, S=None, frame_length=2048, hop_length=512):
-    '''Compute root-mean-square (RMS) energy for each frame, either from the
+    """Compute root-mean-square (RMS) energy for each frame, either from the
     audio samples `y` or from a spectrogram `S`.
 
     Computing the energy from audio samples is faster as it doesn't require a
@@ -557,35 +550,35 @@ def rmse(y=None, S=None, frame_length=2048, hop_length=512):
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> librosa.feature.rmse(y=y)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> librosa.feature.rmse(y=y)
     array([[ 0.   ,  0.056, ...,  0.   ,  0.   ]], dtype=float32)
 
     Or from spectrogram input
 
-    >>> S, phase = librosa.magphase(librosa.stft(y))
-    >>> rms = librosa.feature.rmse(S=S)
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2, 1, 1)
-    >>> plt.semilogy(rms.T, label='RMS Energy')
-    >>> plt.xticks([])
-    >>> plt.xlim([0, rms.shape[-1]])
-    >>> plt.legend(loc='best')
-    >>> plt.subplot(2, 1, 2)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
-    ...                          y_axis='log', x_axis='time')
-    >>> plt.title('log Power spectrogram')
-    >>> plt.tight_layout()
+    # >>> S, phase = librosa.magphase(librosa.stft(y))
+    # >>> rms = librosa.feature.rmse(S=S)
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2, 1, 1)
+    # >>> plt.semilogy(rms.T, label='RMS Energy')
+    # >>> plt.xticks([])
+    # >>> plt.xlim([0, rms.shape[-1]])
+    # >>> plt.legend(loc='best')
+    # >>> plt.subplot(2, 1, 2)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
+    # ...                          y_axis='log', x_axis='time')
+    # >>> plt.title('log Power spectrogram')
+    # >>> plt.tight_layout()
 
     Use a STFT window of constant ones and no frame centering to get consistent
     results with the RMS energy computed from the audio samples `y`
 
-    >>> S = librosa.magphase(librosa.stft(y, window=np.ones, center=False))[0]
-    >>> librosa.feature.rmse(S=S)
+    # >>> S = librosa.magphase(librosa.stft(y, window=np.ones, center=False))[0]
+    # >>> librosa.feature.rmse(S=S)
 
-    '''
+    """
     
     # Don't need??>..
 #    frame_length = rename_kw('n_fft', n_fft,
@@ -609,7 +602,7 @@ def rmse(y=None, S=None, frame_length=2048, hop_length=512):
 
 def poly_features(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
                   order=1, freq=None):
-    '''Get coefficients of fitting an nth-order polynomial to the columns
+    """Get coefficients of fitting an nth-order polynomial to the columns
     of a spectrogram.
 
     Parameters
@@ -652,46 +645,46 @@ def poly_features(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> S = np.abs(librosa.stft(y))
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> S = np.abs(librosa.stft(y))
 
     Fit a degree-0 polynomial (constant) to each frame
 
-    >>> p0 = librosa.feature.poly_features(S=S, order=0)
+    # >>> p0 = librosa.feature.poly_features(S=S, order=0)
 
     Fit a linear polynomial to each frame
 
-    >>> p1 = librosa.feature.poly_features(S=S, order=1)
+    # >>> p1 = librosa.feature.poly_features(S=S, order=1)
 
     Fit a quadratic to each frame
 
-    >>> p2 = librosa.feature.poly_features(S=S, order=2)
+    # >>> p2 = librosa.feature.poly_features(S=S, order=2)
 
     Plot the results for comparison
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure(figsize=(8, 8))
-    >>> ax = plt.subplot(4,1,1)
-    >>> plt.plot(p2[2], label='order=2', alpha=0.8)
-    >>> plt.plot(p1[1], label='order=1', alpha=0.8)
-    >>> plt.plot(p0[0], label='order=0', alpha=0.8)
-    >>> plt.xticks([])
-    >>> plt.ylabel('Constant')
-    >>> plt.legend()
-    >>> plt.subplot(4,1,2, sharex=ax)
-    >>> plt.plot(p2[1], label='order=2', alpha=0.8)
-    >>> plt.plot(p1[0], label='order=1', alpha=0.8)
-    >>> plt.xticks([])
-    >>> plt.ylabel('Linear')
-    >>> plt.subplot(4,1,3, sharex=ax)
-    >>> plt.plot(p2[0], label='order=2', alpha=0.8)
-    >>> plt.xticks([])
-    >>> plt.ylabel('Quadratic')
-    >>> plt.subplot(4,1,4, sharex=ax)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
-    ...                          y_axis='log')
-    >>> plt.tight_layout()
-    '''
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure(figsize=(8, 8))
+    # >>> ax = plt.subplot(4,1,1)
+    # >>> plt.plot(p2[2], label='order=2', alpha=0.8)
+    # >>> plt.plot(p1[1], label='order=1', alpha=0.8)
+    # >>> plt.plot(p0[0], label='order=0', alpha=0.8)
+    # >>> plt.xticks([])
+    # >>> plt.ylabel('Constant')
+    # >>> plt.legend()
+    # >>> plt.subplot(4,1,2, sharex=ax)
+    # >>> plt.plot(p2[1], label='order=2', alpha=0.8)
+    # >>> plt.plot(p1[0], label='order=1', alpha=0.8)
+    # >>> plt.xticks([])
+    # >>> plt.ylabel('Linear')
+    # >>> plt.subplot(4,1,3, sharex=ax)
+    # >>> plt.plot(p2[0], label='order=2', alpha=0.8)
+    # >>> plt.xticks([])
+    # >>> plt.ylabel('Quadratic')
+    # >>> plt.subplot(4,1,4, sharex=ax)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max),
+    # ...                          y_axis='log')
+    # >>> plt.tight_layout()
+    """
 
     S, n_fft = mag_spectrogram(y=y, S=S, n_fft=n_fft, hop_length=hop_length)
 
@@ -712,7 +705,7 @@ def poly_features(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
 def zero_crossing_rate(y, frame_length=2048, hop_length=512, center=True,
                        **kwargs):
-    '''Compute the zero-crossing rate of an audio time series.
+    """Compute the zero-crossing rate of an audio time series.
 
     Parameters
     ----------
@@ -750,11 +743,11 @@ def zero_crossing_rate(y, frame_length=2048, hop_length=512, center=True,
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> librosa.feature.zero_crossing_rate(y)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> librosa.feature.zero_crossing_rate(y)
     array([[ 0.134,  0.139, ...,  0.387,  0.322]])
 
-    '''
+    """
 
     valid_audio(y)
 
@@ -827,8 +820,8 @@ def chroma_stft(y=None, sr=48000, S=None, norm=np.inf, n_fft=2048,
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> librosa.feature.chroma_stft(y=y, sr=sr)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> librosa.feature.chroma_stft(y=y, sr=sr)
     array([[ 0.974,  0.881, ...,  0.925,  1.   ],
            [ 1.   ,  0.841, ...,  0.882,  0.878],
            ...,
@@ -837,9 +830,9 @@ def chroma_stft(y=None, sr=48000, S=None, norm=np.inf, n_fft=2048,
 
     Use an energy (magnitude) spectrum instead of power spectrogram
 
-    >>> S = np.abs(librosa.stft(y))
-    >>> chroma = librosa.feature.chroma_stft(S=S, sr=sr)
-    >>> chroma
+    # >>> S = np.abs(librosa.stft(y))
+    # >>> chroma = librosa.feature.chroma_stft(S=S, sr=sr)
+    # >>> chroma
     array([[ 0.884,  0.91 , ...,  0.861,  0.858],
            [ 0.963,  0.785, ...,  0.968,  0.896],
            ...,
@@ -848,21 +841,21 @@ def chroma_stft(y=None, sr=48000, S=None, norm=np.inf, n_fft=2048,
 
     Use a pre-computed power spectrogram with a larger frame
 
-    >>> S = np.abs(librosa.stft(y, n_fft=4096))**2
-    >>> chroma = librosa.feature.chroma_stft(S=S, sr=sr)
-    >>> chroma
+    # >>> S = np.abs(librosa.stft(y, n_fft=4096))**2
+    # >>> chroma = librosa.feature.chroma_stft(S=S, sr=sr)
+    # >>> chroma
     array([[ 0.685,  0.477, ...,  0.961,  0.986],
            [ 0.674,  0.452, ...,  0.952,  0.926],
            ...,
            [ 0.844,  0.575, ...,  0.934,  0.869],
            [ 0.793,  0.663, ...,  0.964,  0.972]])
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure(figsize=(10, 4))
-    >>> librosa.display.specshow(chroma, y_axis='chroma', x_axis='time')
-    >>> plt.colorbar()
-    >>> plt.title('Chromagram')
-    >>> plt.tight_layout()
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure(figsize=(10, 4))
+    # >>> librosa.display.specshow(chroma, y_axis='chroma', x_axis='time')
+    # >>> plt.colorbar()
+    # >>> plt.title('Chromagram')
+    # >>> plt.tight_layout()
 
     """
 
@@ -890,7 +883,7 @@ def chroma_stft(y=None, sr=48000, S=None, norm=np.inf, n_fft=2048,
 def chroma_cqt(y=None, sr=48000, C=None, hop_length=512, fmin=None,
                norm=np.inf, threshold=0.0, tuning=None, n_chroma=12,
                n_octaves=7, window=None, bins_per_octave=None, cqt_mode='full'):
-    r'''Constant-Q chromagram
+    """Constant-Q chromagram
 
     Parameters
     ----------
@@ -953,25 +946,25 @@ def chroma_cqt(y=None, sr=48000, C=None, hop_length=512, fmin=None,
     Compare a long-window STFT chromagram to the CQT chromagram
 
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file(),
-    ...                      offset=10, duration=15)
-    >>> chroma_stft = librosa.feature.chroma_stft(y=y, sr=sr,
-    ...                                           n_chroma=12, n_fft=4096)
-    >>> chroma_cq = librosa.feature.chroma_cqt(y=y, sr=sr)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file(),
+    # ...                      offset=10, duration=15)
+    # >>> chroma_stft = librosa.feature.chroma_stft(y=y, sr=sr,
+    # ...                                           n_chroma=12, n_fft=4096)
+    # >>> chroma_cq = librosa.feature.chroma_cqt(y=y, sr=sr)
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2,1,1)
+    # >>> librosa.display.specshow(chroma_stft, y_axis='chroma')
+    # >>> plt.title('chroma_stft')
+    # >>> plt.colorbar()
+    # >>> plt.subplot(2,1,2)
+    # >>> librosa.display.specshow(chroma_cq, y_axis='chroma', x_axis='time')
+    # >>> plt.title('chroma_cqt')
+    # >>> plt.colorbar()
+    # >>> plt.tight_layout()
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2,1,1)
-    >>> librosa.display.specshow(chroma_stft, y_axis='chroma')
-    >>> plt.title('chroma_stft')
-    >>> plt.colorbar()
-    >>> plt.subplot(2,1,2)
-    >>> librosa.display.specshow(chroma_cq, y_axis='chroma', x_axis='time')
-    >>> plt.title('chroma_cqt')
-    >>> plt.colorbar()
-    >>> plt.tight_layout()
-
-    '''
+    """
 
     cqt_func = {'full': cqt, 'hybrid': hybrid_cqt}
 
@@ -1009,7 +1002,7 @@ def chroma_cens(y=None, sr=48000, C=None, hop_length=512, fmin=None,
                 tuning=None, n_chroma=12,
                 n_octaves=7, bins_per_octave=None, cqt_mode='full', window=None,
                 norm=2, win_len_smooth=41):
-    r'''Computes the chroma variant "Chroma Energy Normalized" (CENS), following [1]_.
+    """Computes the chroma variant "Chroma Energy Normalized" (CENS), following [1]_.
 
     .. [1] Meinard Müller and Sebastian Ewert
            Chroma Toolbox: MATLAB implementations for extracting variants of chroma-based audio features
@@ -1077,23 +1070,23 @@ def chroma_cens(y=None, sr=48000, C=None, hop_length=512, fmin=None,
     Compare standard cqt chroma to CENS.
 
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file(),
-    ...                      offset=10, duration=15)
-    >>> chroma_cens = librosa.feature.chroma_cens(y=y, sr=sr)
-    >>> chroma_cq = librosa.feature.chroma_cqt(y=y, sr=sr)
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2,1,1)
-    >>> librosa.display.specshow(chroma_cq, y_axis='chroma')
-    >>> plt.title('chroma_cq')
-    >>> plt.colorbar()
-    >>> plt.subplot(2,1,2)
-    >>> librosa.display.specshow(chroma_cens, y_axis='chroma', x_axis='time')
-    >>> plt.title('chroma_cens')
-    >>> plt.colorbar()
-    >>> plt.tight_layout()
-    '''
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file(),
+    # ...                      offset=10, duration=15)
+    # >>> chroma_cens = librosa.feature.chroma_cens(y=y, sr=sr)
+    # >>> chroma_cq = librosa.feature.chroma_cqt(y=y, sr=sr)
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2,1,1)
+    # >>> librosa.display.specshow(chroma_cq, y_axis='chroma')
+    # >>> plt.title('chroma_cq')
+    # >>> plt.colorbar()
+    # >>> plt.subplot(2,1,2)
+    # >>> librosa.display.specshow(chroma_cens, y_axis='chroma', x_axis='time')
+    # >>> plt.title('chroma_cens')
+    # >>> plt.colorbar()
+    # >>> plt.tight_layout()
+    """
     chroma = chroma_cqt(y=y, C=C, sr=sr,
                         hop_length=hop_length,
                         fmin=fmin,
@@ -1130,7 +1123,7 @@ def chroma_cens(y=None, sr=48000, C=None, hop_length=512, fmin=None,
 
 
 def tonnetz(y=None, sr=48000, chroma=None):
-    '''Computes the tonal centroid features (tonnetz), following the method of
+    """Computes the tonal centroid features (tonnetz), following the method of
     [1]_.
 
     .. [1] Harte, C., Sandler, M., & Gasser, M. (2006). "Detecting Harmonic
@@ -1176,10 +1169,10 @@ def tonnetz(y=None, sr=48000, chroma=None):
     --------
     Compute tonnetz features from the harmonic component of a song
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> y = librosa.effects.harmonic(y)
-    >>> tonnetz = librosa.feature.tonnetz(y=y, sr=sr)
-    >>> tonnetz
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> y = librosa.effects.harmonic(y)
+    # >>> tonnetz = librosa.feature.tonnetz(y=y, sr=sr)
+    # >>> tonnetz
     array([[-0.073, -0.053, ..., -0.054, -0.073],
            [ 0.001,  0.001, ..., -0.054, -0.062],
            ...,
@@ -1188,19 +1181,19 @@ def tonnetz(y=None, sr=48000, chroma=None):
 
     Compare the tonnetz features to `chroma_cqt`
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.subplot(2, 1, 1)
-    >>> librosa.display.specshow(tonnetz, y_axis='tonnetz')
-    >>> plt.colorbar()
-    >>> plt.title('Tonal Centroids (Tonnetz)')
-    >>> plt.subplot(2, 1, 2)
-    >>> librosa.display.specshow(librosa.feature.chroma_cqt(y, sr=sr),
-    ...                          y_axis='chroma', x_axis='time')
-    >>> plt.colorbar()
-    >>> plt.title('Chroma')
-    >>> plt.tight_layout()
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.subplot(2, 1, 1)
+    # >>> librosa.display.specshow(tonnetz, y_axis='tonnetz')
+    # >>> plt.colorbar()
+    # >>> plt.title('Tonal Centroids (Tonnetz)')
+    # >>> plt.subplot(2, 1, 2)
+    # >>> librosa.display.specshow(librosa.feature.chroma_cqt(y, sr=sr),
+    # ...                          y_axis='chroma', x_axis='time')
+    # >>> plt.colorbar()
+    # >>> plt.title('Chroma')
+    # >>> plt.tight_layout()
 
-    '''
+    """
 
     if y is None and chroma is None:
         raise ParameterError('Either the audio samples or the chromagram must be '
@@ -1266,8 +1259,8 @@ def mfcc(y=None, sr=48000, S=None, n_mfcc=20, **kwargs):
     --------
     Generate mfccs from a time series
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> librosa.feature.mfcc(y=y, sr=sr)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> librosa.feature.mfcc(y=y, sr=sr)
     array([[ -5.229e+02,  -4.944e+02, ...,  -5.229e+02,  -5.229e+02],
            [  7.105e-15,   3.787e+01, ...,  -7.105e-15,  -7.105e-15],
            ...,
@@ -1276,9 +1269,9 @@ def mfcc(y=None, sr=48000, S=None, n_mfcc=20, **kwargs):
 
     Use a pre-computed log-power Mel spectrogram
 
-    >>> S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128,
-    ...                                    fmax=8000)
-    >>> librosa.feature.mfcc(S=librosa.power_to_db(S))
+    # >>> S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128,
+    # ...                                    fmax=8000)
+    # >>> librosa.feature.mfcc(S=librosa.power_to_db(S))
     array([[ -5.207e+02,  -4.898e+02, ...,  -5.207e+02,  -5.207e+02],
            [ -2.576e-14,   4.054e+01, ...,  -3.997e-14,  -3.997e-14],
            ...,
@@ -1287,17 +1280,16 @@ def mfcc(y=None, sr=48000, S=None, n_mfcc=20, **kwargs):
 
     Get more components
 
-    >>> mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
+    # >>> mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
 
     Visualize the MFCC series
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure(figsize=(10, 4))
-    >>> librosa.display.specshow(mfccs, x_axis='time')
-    >>> plt.colorbar()
-    >>> plt.title('MFCC')
-    >>> plt.tight_layout()
-
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure(figsize=(10, 4))
+    # >>> librosa.display.specshow(mfccs, x_axis='time')
+    # >>> plt.colorbar()
+    # >>> plt.title('MFCC')
+    # >>> plt.tight_layout()
 
     """
 
@@ -1360,8 +1352,8 @@ def melspectrogram(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> librosa.feature.melspectrogram(y=y, sr=sr)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> librosa.feature.melspectrogram(y=y, sr=sr)
     array([[  2.891e-07,   2.548e-03, ...,   8.116e-09,   5.633e-09],
            [  1.986e-07,   1.162e-02, ...,   9.332e-08,   6.716e-09],
            ...,
@@ -1370,23 +1362,22 @@ def melspectrogram(y=None, sr=48000, S=None, n_fft=2048, hop_length=512,
 
     Using a pre-computed power spectrogram
 
-    >>> D = np.abs(librosa.stft(y))**2
-    >>> S = librosa.feature.melspectrogram(S=D)
-
-    >>> # Passing through arguments to the Mel filters
-    >>> S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128,
-    ...                                     fmax=8000)
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure(figsize=(10, 4))
-    >>> librosa.display.specshow(librosa.power_to_db(S,
-    ...                                              ref=np.max),
-    ...                          y_axis='mel', fmax=8000,
-    ...                          x_axis='time')
-    >>> plt.colorbar(format='%+2.0f dB')
-    >>> plt.title('Mel spectrogram')
-    >>> plt.tight_layout()
-
+    # >>> D = np.abs(librosa.stft(y))**2
+    # >>> S = librosa.feature.melspectrogram(S=D)
+    #
+    # >>> # Passing through arguments to the Mel filters
+    # >>> S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128,
+    # ...                                     fmax=8000)
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure(figsize=(10, 4))
+    # >>> librosa.display.specshow(librosa.power_to_db(S,
+    # ...                                              ref=np.max),
+    # ...                          y_axis='mel', fmax=8000,
+    # ...                          x_axis='time')
+    # >>> plt.colorbar(format='%+2.0f dB')
+    # >>> plt.title('Mel spectrogram')
+    # >>> plt.tight_layout()
 
     """
 

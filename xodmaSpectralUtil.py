@@ -17,7 +17,7 @@
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
-
+import os
 import sys
 import re
 import numpy as np
@@ -27,8 +27,9 @@ import scipy as sp
 import six
 
 
-rootDir = '../../'
-sys.path.insert(0, rootDir+'audio/xodma/')
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+sys.path.insert(0, rootDir+'/xodma')
 
 from cache import cache
 from xodmaParameterError import ParameterError
@@ -108,72 +109,146 @@ WINDOW_BANDWIDTHS = {'bart': 1.3334961334912805,
                      'triangle': 1.3331706523555851}
 
 
-def frame(y, frame_length=2048, hop_length=512):
-    """Slice a time series into overlapping frames.
-
+def frame(
+    x: np.ndarray,
+    *,
+    frame_length: int,
+    hop_length: int,
+    axis: int = -1,
+    writeable: bool = False,
+    subok: bool = False,
+) -> np.ndarray:
+    """Slice a data array into (overlapping) frames.
     This implementation uses low-level stride manipulation to avoid
-    redundant copies of the time series data.
-
+    making a copy of the data.  The resulting frame representation
+    is a new view of the same input data.
+    For example, a one-dimensional input ``x = [0, 1, 2, 3, 4, 5, 6]``
+    can be framed with frame length 3 and hop length 2 in two ways.
+    The first (``axis=-1``), results in the array ``x_frames``::
+        [[0, 2, 4],
+         [1, 3, 5],
+         [2, 4, 6]]
+    where each column ``x_frames[:, i]`` contains a contiguous slice of
+    the input ``x[i * hop_length : i * hop_length + frame_length]``.
+    The second way (``axis=0``) results in the array ``x_frames``::
+        [[0, 1, 2],
+         [2, 3, 4],
+         [4, 5, 6]]
+    where each row ``x_frames[i]`` contains a contiguous slice of the input.
+    This generalizes to higher dimensional inputs, as shown in the examples below.
+    In general, the framing operation increments by 1 the number of dimensions,
+    adding a new "frame axis" either before the framing axis (if ``axis < 0``)
+    or after the framing axis (if ``axis >= 0``).
     Parameters
     ----------
-    y : np.ndarray [shape=(n,)]
-        Time series to frame. Must be one-dimensional and contiguous
-        in memory.
-
+    x : np.ndarray
+        Array to frame
     frame_length : int > 0 [scalar]
-        Length of the frame in samples
-
+        Length of the frame
     hop_length : int > 0 [scalar]
-        Number of samples to hop between frames
-
+        Number of steps to advance between frames
+    axis : int
+        The axis along which to frame.
+    writeable : bool
+        If ``True``, then the framed view of ``x`` is read-only.
+        If ``False``, then the framed view is read-write.  Note that writing to the framed view
+        will also write to the input array ``x`` in this case.
+    subok : bool
+        If True, sub-classes will be passed-through, otherwise the returned array will be
+        forced to be a base-class array (default).
     Returns
     -------
-    y_frames : np.ndarray [shape=(frame_length, N_FRAMES)]
-        An array of frames sampled from `y`:
-        `y_frames[i, j] == y[j * hop_length + i]`
-
+    x_frames : np.ndarray [shape=(..., frame_length, N_FRAMES, ...)]
+        A framed view of ``x``, for example with ``axis=-1`` (framing on the last dimension)::
+            x_frames[..., j] == x[..., j * hop_length : j * hop_length + frame_length]
+        If ``axis=0`` (framing on the first dimension), then::
+            x_frames[j] = x[j * hop_length : j * hop_length + frame_length]
     Raises
     ------
     ParameterError
-        If `y` is not contiguous in memory, framing is invalid.
-        See `np.ascontiguous()` for details.
-
-        If `hop_length < 1`, frames cannot advance.
-
+        If ``x.shape[axis] < frame_length``, there is not enough data to fill one frame.
+        If ``hop_length < 1``, frames cannot advance.
+    See Also
+    --------
+    numpy.lib.stride_tricks.as_strided
     Examples
     --------
-    Extract 2048-sample frames from `y` with a hop of 64 samples per frame
-
-    >> y, sr = librosa.load(librosa.util.example_audio_file())
-    >> librosa.util.frame(y, frame_length=2048, hop_length=64)
-    array([[ -9.216e-06,   7.710e-06, ...,  -2.117e-06,  -4.362e-07],
-           [  2.518e-06,  -6.294e-06, ...,  -1.775e-05,  -6.365e-06],
-           ...,
-           [ -7.429e-04,   5.173e-03, ...,   1.105e-05,  -5.074e-06],
-           [  2.169e-03,   4.867e-03, ...,   3.666e-06,  -5.571e-06]], dtype=float32)
-
+    # Extract 2048-sample frames from monophonic signal with a hop of 64 samples per frame
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'))
+    # >>> frames = librosa.util.frame(y, frame_length=2048, hop_length=64)
+    # >>> frames
+    # array([[-1.407e-03, -2.604e-02, ..., -1.795e-05, -8.108e-06],
+    #        [-4.461e-04, -3.721e-02, ..., -1.573e-05, -1.652e-05],
+    #        ...,
+    #        [ 7.960e-02, -2.335e-01, ..., -6.815e-06,  1.266e-05],
+    #        [ 9.568e-02, -1.252e-01, ...,  7.397e-06, -1.921e-05]],
+    #       dtype=float32)
+    # >>> y.shape
+    # (117601,)
+    # >>> frames.shape
+    # (2048, 1806)
+    # Or frame along the first axis instead of the last:
+    # >>> frames = librosa.util.frame(y, frame_length=2048, hop_length=64, axis=0)
+    # >>> frames.shape
+    # (1806, 2048)
+    # Frame a stereo signal:
+    # >>> y, sr = librosa.load(librosa.ex('trumpet', hq=True), mono=False)
+    # >>> y.shape
+    # (2, 117601)
+    # >>> frames = librosa.util.frame(y, frame_length=2048, hop_length=64)
+    # (2, 2048, 1806)
+    # Carve an STFT into fixed-length patches of 32 frames with 50% overlap
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'))
+    # >>> S = np.abs(librosa.stft(y))
+    # >>> S.shape
+    # (1025, 230)
+    # >>> S_patch = librosa.util.frame(S, frame_length=32, hop_length=16)
+    # >>> S_patch.shape
+    # (1025, 32, 13)
+    # >>> # The first patch contains the first 32 frames of S
+    # >>> np.allclose(S_patch[:, :, 0], S[:, :32])
+    # True
+    # >>> # The second patch contains frames 16 to 16+32=48, and so on
+    # >>> np.allclose(S_patch[:, :, 1], S[:, 16:48])
+    # True
     """
 
-    if len(y) < frame_length:
-        raise ParameterError('Buffer is too short (n={:d})'
-                             ' for frame_length={:d}'.format(len(y), frame_length))
+    # This implementation is derived from numpy.lib.stride_tricks.sliding_window_view (1.20.0)
+    # https://numpy.org/doc/stable/reference/generated/numpy.lib.stride_tricks.sliding_window_view.html
+
+    x = np.array(x, copy=False, subok=subok)
+
+    if x.shape[axis] < frame_length:
+        raise ParameterError(
+            f"Input is too short (n={x.shape[axis]:d}) for frame_length={frame_length:d}"
+        )
 
     if hop_length < 1:
-        raise ParameterError('Invalid hop_length: {:d}'.format(hop_length))
+        raise ParameterError(f"Invalid hop_length: {hop_length:d}")
 
-    if not y.flags['C_CONTIGUOUS']:
-        raise ParameterError('Input buffer must be contiguous.')
+    # put our new within-frame axis at the end for now
+    out_strides = x.strides + tuple([x.strides[axis]])
 
-    #valid_audio(y)
+    # Reduce the shape on the framing axis
+    x_shape_trimmed = list(x.shape)
+    x_shape_trimmed[axis] -= frame_length - 1
 
-    # Compute the number of frames that will fit. The end may get truncated.
-    n_frames = 1 + int((len(y) - frame_length) / hop_length)
+    out_shape = tuple(x_shape_trimmed) + tuple([frame_length])
+    xw = as_strided(
+        x, strides=out_strides, shape=out_shape, subok=subok, writeable=writeable
+    )
 
-    # Vertical stride is one sample
-    # Horizontal stride is `hop_length` samples
-    y_frames = as_strided(y, shape=(frame_length, n_frames),
-                          strides=(y.itemsize, hop_length * y.itemsize))
-    return y_frames
+    if axis < 0:
+        target_axis = axis - 1
+    else:
+        target_axis = axis + 1
+
+    xw = np.moveaxis(xw, -1, target_axis)
+
+    # Downsample along the target axis
+    slices = [slice(None)] * xw.ndim
+    slices[axis] = slice(0, None, hop_length)
+    return xw[tuple(slices)]
 
 
 def frames_to_samples(frames, hop_length=512, n_fft=None):

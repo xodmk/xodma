@@ -27,9 +27,7 @@
 import os
 import sys
 import warnings
-import numpy as np
 import scipy.fftpack as fft
-import scipy
 import numpy as np
 import scipy
 import scipy.ndimage
@@ -42,15 +40,17 @@ from numpy.typing import DTypeLike
 from typing import Any, Callable, Optional, Tuple, List, Union, overload
 from typing_extensions import Literal
 
-rootDir = '../../'
-sys.path.insert(0, rootDir+'audio/xodma')
+currentDir = os.getcwd()
+rootDir = os.path.dirname(currentDir)
+sys.path.insert(0, rootDir+'/xodma')
 
 # import cache
 from cache import cache
 from xodmaSpectralUtil import MAX_MEM_BLOCK, note_to_hz, hz_to_midi, hz_to_octs
 from xodmaSpectralUtil import fft_frequencies, mel_frequencies, A_weighting
 from xodmaSpectralUtil import frame, get_window, window_bandwidth
-from xodmaMiscUtil import tiny, fix_length, valid_int, normalize, pad_center
+from xodmaMiscUtil import tiny, fix_length, valid_int, normalize, pad_center, expand_to
+from xodmaMiscUtil import is_positive_int, dtype_r2c, dtype_c2r, cyclic_gradient
 from xodmaAudioTools import valid_audio, resample
 from xodmaParameterError import ParameterError
 from _typing import _WindowSpec, _PadMode, _PadModeSTFT
@@ -79,519 +79,522 @@ __all__ = [
     "fmt",
     "pcen",
     "griffinlim",
+    "constant_q_lengths",
+    "cq_to_chroma",
+    "peak_pick"
 ]
 
 
-# @cache(level=20)
-# def stft(
-#     y: np.ndarray,
-#     *,
-#     n_fft: int = 2048,
-#     hop_length: Optional[int] = None,
-#     win_length: Optional[int] = None,
-#     window: _WindowSpec = "hann",
-#     center: bool = True,
-#     dtype: Optional[DTypeLike] = None,
-#     pad_mode: _PadModeSTFT = "constant",
-#     out: Optional[np.ndarray] = None,
-# ) -> np.ndarray:
-#     """Short-time Fourier transform (STFT).
-#     The STFT represents a signal in the time-frequency domain by
-#     computing discrete Fourier transforms (DFT) over short overlapping
-#     windows.
-#     This function returns a complex-valued matrix D such that
-#     - ``np.abs(D[..., f, t])`` is the magnitude of frequency bin ``f``
-#       at frame ``t``, and
-#     - ``np.angle(D[..., f, t])`` is the phase of frequency bin ``f``
-#       at frame ``t``.
-#     The integers ``t`` and ``f`` can be converted to physical units by means
-#     of the utility functions `frames_to_samples` and `fft_frequencies`.
-#     Parameters
-#     ----------
-#     y : np.ndarray [shape=(..., n)], real-valued
-#         input signal. Multi-channel is supported.
-#     n_fft : int > 0 [scalar]
-#         length of the windowed signal after padding with zeros.
-#         The number of rows in the STFT matrix ``D`` is ``(1 + n_fft/2)``.
-#         The default value, ``n_fft=2048`` samples, corresponds to a physical
-#         duration of 93 milliseconds at a sample rate of 22050 Hz, i.e. the
-#         default sample rate in librosa. This value is well adapted for music
-#         signals. However, in speech processing, the recommended value is 512,
-#         corresponding to 23 milliseconds at a sample rate of 22050 Hz.
-#         In any case, we recommend setting ``n_fft`` to a power of two for
-#         optimizing the speed of the fast Fourier transform (FFT) algorithm.
-#     hop_length : int > 0 [scalar]
-#         number of audio samples between adjacent STFT columns.
-#         Smaller values increase the number of columns in ``D`` without
-#         affecting the frequency resolution of the STFT.
-#         If unspecified, defaults to ``win_length // 4`` (see below).
-#     win_length : int <= n_fft [scalar]
-#         Each frame of audio is windowed by ``window`` of length ``win_length``
-#         and then padded with zeros to match ``n_fft``.
-#         Smaller values improve the temporal resolution of the STFT (i.e. the
-#         ability to discriminate impulses that are closely spaced in time)
-#         at the expense of frequency resolution (i.e. the ability to discriminate
-#         pure tones that are closely spaced in frequency). This effect is known
-#         as the time-frequency localization trade-off and needs to be adjusted
-#         according to the properties of the input signal ``y``.
-#         If unspecified, defaults to ``win_length = n_fft``.
-#     window : string, tuple, number, function, or np.ndarray [shape=(n_fft,)]
-#         Either:
-#         - a window specification (string, tuple, or number);
-#           see `scipy.signal.get_window`
-#         - a window function, such as `scipy.signal.windows.hann`
-#         - a vector or array of length ``n_fft``
-#         Defaults to a raised cosine window (`'hann'`), which is adequate for
-#         most applications in audio signal processing.
-#         .. see also:: `filters.get_window`
-#     center : boolean
-#         If ``True``, the signal ``y`` is padded so that frame
-#         ``D[:, t]`` is centered at ``y[t * hop_length]``.
-#         If ``False``, then ``D[:, t]`` begins at ``y[t * hop_length]``.
-#         Defaults to ``True``,  which simplifies the alignment of ``D`` onto a
-#         time grid by means of `librosa.frames_to_samples`.
-#         Note, however, that ``center`` must be set to `False` when analyzing
-#         signals with `librosa.stream`.
-#         .. see also:: `librosa.stream`
-#     dtype : np.dtype, optional
-#         Complex numeric type for ``D``.  Default is inferred to match the
-#         precision of the input signal.
-#     pad_mode : string or function
-#         If ``center=True``, this argument is passed to `np.pad` for padding
-#         the edges of the signal ``y``. By default (``pad_mode="constant"``),
-#         ``y`` is padded on both sides with zeros.
-#         .. note:: Not all padding modes supported by `numpy.pad` are supported here.
-#             `wrap`, `mean`, `maximum`, `median`, and `minimum` are not supported.
-#             Other modes that depend at most on input values at the edges of the
-#             signal (e.g., `constant`, `edge`, `linear_ramp`) are supported.
-#         If ``center=False``,  this argument is ignored.
-#         .. see also:: `numpy.pad`
-#     out : np.ndarray or None
-#         A pre-allocated, complex-valued array to store the STFT results.
-#         This must be of compatible shape and dtype for the given input parameters.
-#         If `out` is larger than necessary for the provided input signal, then only
-#         a prefix slice of `out` will be used.
-#         If not provided, a new array is allocated and returned.
-#     Returns
-#     -------
-#     D : np.ndarray [shape=(..., 1 + n_fft/2, n_frames), dtype=dtype]
-#         Complex-valued matrix of short-term Fourier transform
-#         coefficients.
-#         If a pre-allocated `out` array is provided, then `D` will be
-#         a reference to `out`.
-#         If `out` is larger than necessary, then `D` will be a sliced
-#         view: `D = out[..., :n_frames]`.
-#     See Also
-#     --------
-#     istft : Inverse STFT
-#     reassigned_spectrogram : Time-frequency reassigned spectrogram
-#     Notes
-#     -----
-#     This function caches at level 20.
-#     Examples
-#     --------
-#     # >>> y, sr = librosa.load(librosa.ex('trumpet'))
-#     # >>> S = np.abs(librosa.stft(y))
-#     # >>> S
-#     # array([[5.395e-03, 3.332e-03, ..., 9.862e-07, 1.201e-05],
-#     #        [3.244e-03, 2.690e-03, ..., 9.536e-07, 1.201e-05],
-#     #        ...,
-#     #        [7.523e-05, 3.722e-05, ..., 1.188e-04, 1.031e-03],
-#     #        [7.640e-05, 3.944e-05, ..., 5.180e-04, 1.346e-03]],
-#     #       dtype=float32)
-#     # Use left-aligned frames, instead of centered frames
-#     # >>> S_left = librosa.stft(y, center=False)
-#     # Use a shorter hop length
-#     # >>> D_short = librosa.stft(y, hop_length=64)
-#     # Display a spectrogram
-#     # >>> import matplotlib.pyplot as plt
-#     # >>> fig, ax = plt.subplots()
-#     # >>> img = librosa.display.specshow(librosa.amplitude_to_db(S,
-#     # ...                                                        ref=np.max),
-#     # ...                                y_axis='log', x_axis='time', ax=ax)
-#     # >>> ax.set_title('Power spectrogram')
-#     # >>> fig.colorbar(img, ax=ax, format="%+2.0f dB")
-#     """
-#
-#     # By default, use the entire frame
-#     if win_length is None:
-#         win_length = n_fft
-#
-#     # Set the default hop, if it's not already specified
-#     if hop_length is None:
-#         hop_length = int(win_length // 4)
-#     elif not util.is_positive_int(hop_length):
-#         raise ParameterError(f"hop_length={hop_length} must be a positive integer")
-#
-#     # Check audio is valid
-#     util.valid_audio(y, mono=False)
-#
-#     fft_window = get_window(window, win_length, fftbins=True)
-#
-#     # Pad the window out to n_fft size
-#     fft_window = util.pad_center(fft_window, size=n_fft)
-#
-#     # Reshape so that the window can be broadcast
-#     fft_window = util.expand_to(fft_window, ndim=1 + y.ndim, axes=-2)
-#
-#     # Pad the time series so that frames are centered
-#     if center:
-#         if pad_mode in ("wrap", "maximum", "mean", "median", "minimum"):
-#             # Note: padding with a user-provided function "works", but
-#             # use at your own risk.
-#             # Since we don't pass-through kwargs here, any arguments
-#             # to a user-provided pad function should be encapsulated
-#             # by using functools.partial:
-#             #
-#             # >>> my_pad_func = functools.partial(pad_func, foo=x, bar=y)
-#             # >>> librosa.stft(..., pad_mode=my_pad_func)
-#
-#             raise ParameterError(
-#                 f"pad_mode='{pad_mode}' is not supported by librosa.stft"
-#             )
-#
-#         if n_fft > y.shape[-1]:
-#             warnings.warn(
-#                 f"n_fft={n_fft} is too large for input signal of length={y.shape[-1]}"
-#             )
-#
-#         # Set up the padding array to be empty, and we'll fix the target dimension later
-#         padding = [(0, 0) for _ in range(y.ndim)]
-#
-#         # How many frames depend on left padding?
-#         start_k = int(np.ceil(n_fft // 2 / hop_length))
-#
-#         # What's the first frame that depends on extra right-padding?
-#         tail_k = (y.shape[-1] + n_fft // 2 - n_fft) // hop_length + 1
-#
-#         if tail_k <= start_k:
-#             # If tail and head overlap, then just copy-pad the signal and carry on
-#             start = 0
-#             extra = 0
-#             padding[-1] = (n_fft // 2, n_fft // 2)
-#             y = np.pad(y, padding, mode=pad_mode)
-#         else:
-#             # If tail and head do not overlap, then we can implement padding on each part separately
-#             # and avoid a full copy-pad
-#
-#             # "Middle" of the signal starts here, and does not depend on head padding
-#             start = start_k * hop_length - n_fft // 2
-#             padding[-1] = (n_fft // 2, 0)
-#
-#             # +1 here is to ensure enough samples to fill the window
-#             # fixes bug #1567
-#             y_pre = np.pad(
-#                 y[..., : (start_k - 1) * hop_length - n_fft // 2 + n_fft + 1],
-#                 padding,
-#                 mode=pad_mode,
-#             )
-#             y_frames_pre = util.frame(y_pre, frame_length=n_fft, hop_length=hop_length)
-#             # Trim this down to the exact number of frames we should have
-#             y_frames_pre = y_frames_pre[..., :start_k]
-#
-#             # How many extra frames do we have from the head?
-#             extra = y_frames_pre.shape[-1]
-#
-#             # Determine if we have any frames that will fit inside the tail pad
-#             if tail_k * hop_length - n_fft // 2 + n_fft <= y.shape[-1] + n_fft // 2:
-#                 padding[-1] = (0, n_fft // 2)
-#                 y_post = np.pad(
-#                     y[..., (tail_k) * hop_length - n_fft // 2 :], padding, mode=pad_mode
-#                 )
-#                 y_frames_post = util.frame(
-#                     y_post, frame_length=n_fft, hop_length=hop_length
-#                 )
-#                 # How many extra frames do we have from the tail?
-#                 extra += y_frames_post.shape[-1]
-#             else:
-#                 # In this event, the first frame that touches tail padding would run off
-#                 # the end of the padded array
-#                 # We'll circumvent this by allocating an empty frame buffer for the tail
-#                 # this keeps the subsequent logic simple
-#                 post_shape = list(y_frames_pre.shape)
-#                 post_shape[-1] = 0
-#                 y_frames_post = np.empty_like(y_frames_pre, shape=post_shape)
-#     else:
-#         if n_fft > y.shape[-1]:
-#             raise ParameterError(
-#                 f"n_fft={n_fft} is too large for uncentered analysis of input signal of length={y.shape[-1]}"
-#             )
-#
-#         # "Middle" of the signal starts at sample 0
-#         start = 0
-#         # We have no extra frames
-#         extra = 0
-#
-#     fft = get_fftlib()
-#
-#     if dtype is None:
-#         dtype = util.dtype_r2c(y.dtype)
-#
-#     # Window the time series.
-#     y_frames = util.frame(y[..., start:], frame_length=n_fft, hop_length=hop_length)
-#
-#     # Pre-allocate the STFT matrix
-#     shape = list(y_frames.shape)
-#
-#     # This is our frequency dimension
-#     shape[-2] = 1 + n_fft // 2
-#
-#     # If there's padding, there will be extra head and tail frames
-#     shape[-1] += extra
-#
-#     if out is None:
-#         stft_matrix = np.zeros(shape, dtype=dtype, order="F")
-#     elif not (np.allclose(out.shape[:-1], shape[:-1]) and out.shape[-1] >= shape[-1]):
-#         raise ParameterError(
-#             f"Shape mismatch for provided output array out.shape={out.shape} and target shape={shape}"
-#         )
-#     elif not np.iscomplexobj(out):
-#         raise ParameterError(f"output with dtype={out.dtype} is not of complex type")
-#     else:
-#         if np.allclose(shape, out.shape):
-#             stft_matrix = out
-#         else:
-#             stft_matrix = out[..., : shape[-1]]
-#
-#     # Fill in the warm-up
-#     if center and extra > 0:
-#         off_start = y_frames_pre.shape[-1]
-#         stft_matrix[..., :off_start] = fft.rfft(fft_window * y_frames_pre, axis=-2)
-#
-#         off_end = y_frames_post.shape[-1]
-#         if off_end > 0:
-#             stft_matrix[..., -off_end:] = fft.rfft(fft_window * y_frames_post, axis=-2)
-#     else:
-#         off_start = 0
-#
-#     n_columns = int(
-#         util.MAX_MEM_BLOCK // (np.prod(y_frames.shape[:-1]) * y_frames.itemsize)
-#     )
-#     n_columns = max(n_columns, 1)
-#
-#     for bl_s in range(0, y_frames.shape[-1], n_columns):
-#         bl_t = min(bl_s + n_columns, y_frames.shape[-1])
-#
-#         stft_matrix[..., bl_s + off_start : bl_t + off_start] = fft.rfft(
-#             fft_window * y_frames[..., bl_s:bl_t], axis=-2
-#         )
-#     return stft_matrix
-#
-#
-# @cache(level=30)
-# def istft(
-#     stft_matrix: np.ndarray,
-#     *,
-#     hop_length: Optional[int] = None,
-#     win_length: Optional[int] = None,
-#     n_fft: Optional[int] = None,
-#     window: _WindowSpec = "hann",
-#     center: bool = True,
-#     dtype: Optional[DTypeLike] = None,
-#     length: Optional[int] = None,
-#     out: Optional[np.ndarray] = None,
-# ) -> np.ndarray:
-#     """
-#     Inverse short-time Fourier transform (ISTFT).
-#     Converts a complex-valued spectrogram ``stft_matrix`` to time-series ``y``
-#     by minimizing the mean squared error between ``stft_matrix`` and STFT of
-#     ``y`` as described in [#]_ up to Section 2 (reconstruction from MSTFT).
-#     In general, window function, hop length and other parameters should be same
-#     as in stft, which mostly leads to perfect reconstruction of a signal from
-#     unmodified ``stft_matrix``.
-#     .. [#] D. W. Griffin and J. S. Lim,
-#         "Signal estimation from modified short-time Fourier transform,"
-#         IEEE Trans. ASSP, vol.32, no.2, pp.236–243, Apr. 1984.
-#     Parameters
-#     ----------
-#     stft_matrix : np.ndarray [shape=(..., 1 + n_fft//2, t)]
-#         STFT matrix from ``stft``
-#     hop_length : int > 0 [scalar]
-#         Number of frames between STFT columns.
-#         If unspecified, defaults to ``win_length // 4``.
-#     win_length : int <= n_fft = 2 * (stft_matrix.shape[0] - 1)
-#         When reconstructing the time series, each frame is windowed
-#         and each sample is normalized by the sum of squared window
-#         according to the ``window`` function (see below).
-#         If unspecified, defaults to ``n_fft``.
-#     n_fft : int > 0 or None
-#         The number of samples per frame in the input spectrogram.
-#         By default, this will be inferred from the shape of ``stft_matrix``.
-#         However, if an odd frame length was used, you can specify the correct
-#         length by setting ``n_fft``.
-#     window : string, tuple, number, function, np.ndarray [shape=(n_fft,)]
-#         - a window specification (string, tuple, or number);
-#           see `scipy.signal.get_window`
-#         - a window function, such as `scipy.signal.windows.hann`
-#         - a user-specified window vector of length ``n_fft``
-#         .. see also:: `filters.get_window`
-#     center : boolean
-#         - If ``True``, ``D`` is assumed to have centered frames.
-#         - If ``False``, ``D`` is assumed to have left-aligned frames.
-#     dtype : numeric type
-#         Real numeric type for ``y``.  Default is to match the numerical
-#         precision of the input spectrogram.
-#     length : int > 0, optional
-#         If provided, the output ``y`` is zero-padded or clipped to exactly
-#         ``length`` samples.
-#     out : np.ndarray or None
-#         A pre-allocated, complex-valued array to store the reconstructed signal
-#         ``y``.  This must be of the correct shape for the given input parameters.
-#         If not provided, a new array is allocated and returned.
-#     Returns
-#     -------
-#     y : np.ndarray [shape=(..., n)]
-#         time domain signal reconstructed from ``stft_matrix``.
-#         If ``stft_matrix`` contains more than two axes
-#         (e.g., from a stereo input signal), then ``y`` will match shape on the leading dimensions.
-#     See Also
-#     --------
-#     stft : Short-time Fourier Transform
-#     Notes
-#     -----
-#     This function caches at level 30.
-#     Examples
-#     --------
-#     >>> y, sr = librosa.load(librosa.ex('trumpet'))
-#     >>> D = librosa.stft(y)
-#     >>> y_hat = librosa.istft(D)
-#     >>> y_hat
-#     array([-1.407e-03, -4.461e-04, ...,  5.131e-06, -1.417e-05],
-#           dtype=float32)
-#     Exactly preserving length of the input signal requires explicit padding.
-#     Otherwise, a partial frame at the end of ``y`` will not be represented.
-#     >>> n = len(y)
-#     >>> n_fft = 2048
-#     >>> y_pad = librosa.util.fix_length(y, size=n + n_fft // 2)
-#     >>> D = librosa.stft(y_pad, n_fft=n_fft)
-#     >>> y_out = librosa.istft(D, length=n)
-#     >>> np.max(np.abs(y - y_out))
-#     8.940697e-08
-#     """
-#
-#     if n_fft is None:
-#         n_fft = 2 * (stft_matrix.shape[-2] - 1)
-#
-#     # By default, use the entire frame
-#     if win_length is None:
-#         win_length = n_fft
-#
-#     # Set the default hop, if it's not already specified
-#     if hop_length is None:
-#         hop_length = int(win_length // 4)
-#
-#     ifft_window = get_window(window, win_length, fftbins=True)
-#
-#     # Pad out to match n_fft, and add broadcasting axes
-#     ifft_window = util.pad_center(ifft_window, size=n_fft)
-#     ifft_window = util.expand_to(ifft_window, ndim=stft_matrix.ndim, axes=-2)
-#
-#     # For efficiency, trim STFT frames according to signal length if available
-#     if length:
-#         if center:
-#             padded_length = length + 2 * (n_fft // 2)
-#         else:
-#             padded_length = length
-#         n_frames = min(stft_matrix.shape[-1], int(np.ceil(padded_length / hop_length)))
-#     else:
-#         n_frames = stft_matrix.shape[-1]
-#
-#     if dtype is None:
-#         dtype = util.dtype_c2r(stft_matrix.dtype)
-#
-#     shape = list(stft_matrix.shape[:-2])
-#     expected_signal_len = n_fft + hop_length * (n_frames - 1)
-#
-#     if length:
-#         expected_signal_len = length
-#     elif center:
-#         expected_signal_len -= 2 * (n_fft // 2)
-#
-#     shape.append(expected_signal_len)
-#
-#     if out is None:
-#         y = np.zeros(shape, dtype=dtype)
-#     elif not np.allclose(out.shape, shape):
-#         raise ParameterError(
-#             f"Shape mismatch for provided output array out.shape={out.shape} != {shape}"
-#         )
-#     else:
-#         y): = out
-#         # Since we'll be doing overlap-add here, this needs to be initialized to zero.
-#         y.fill(0.0)
-#
-#     fft = get_fftlib()
-#
-#     if center:
-#         # First frame that does not depend on padding
-#         #  k * hop_length - n_fft//2 >= 0
-#         # k * hop_length >= n_fft // 2
-#         # k >= (n_fft//2 / hop_length)
-#
-#         start_frame = int(np.ceil((n_fft // 2) / hop_length))
-#
-#         # Do overlap-add on the head block
-#         ytmp = ifft_window * fft.irfft(stft_matrix[..., :start_frame], n=n_fft, axis=-2)
-#
-#         shape[-1] = n_fft + hop_length * (start_frame - 1)
-#         head_buffer = np.zeros(shape, dtype=dtype)
-#
-#         __overlap_add(head_buffer, ytmp, hop_length)
-#
-#         # If y is smaller than the head buffer, take everything
-#         if y.shape[-1] < shape[-1] - n_fft // 2:
-#             y[..., :] = head_buffer[..., n_fft // 2 : y.shape[-1] + n_fft // 2]
-#         else:
-#             # Trim off the first n_fft//2 samples from the head and copy into target buffer
-#             y[..., : shape[-1] - n_fft // 2] = head_buffer[..., n_fft // 2 :]
-#
-#         # This offset compensates for any differences between frame alignment
-#         # and padding truncation
-#         offset = start_frame * hop_length - n_fft // 2
-#
-#     else:
-#         start_frame = 0
-#         offset = 0
-#
-#     n_columns = int(
-#         util.MAX_MEM_BLOCK // (np.prod(stft_matrix.shape[:-1]) * stft_matrix.itemsize)
-#     )
-#     n_columns = max(n_columns, 1)
-#
-#     frame = 0
-#     for bl_s in range(start_frame, n_frames, n_columns):
-#         bl_t = min(bl_s + n_columns, n_frames)
-#
-#         # invert the block and apply the window function
-#         ytmp = ifft_window * fft.irfft(stft_matrix[..., bl_s:bl_t], n=n_fft, axis=-2)
-#
-#         # Overlap-add the istft block starting at the i'th frame
-#         __overlap_add(y[..., frame * hop_length + offset :], ytmp, hop_length)
-#
-#         frame += bl_t - bl_s
-#
-#     # Normalize by sum of squared window
-#     ifft_window_sum = window_sumsquare(
-#         window=window,
-#         n_frames=n_frames,
-#         win_length=win_length,
-#         n_fft=n_fft,
-#         hop_length=hop_length,
-#         dtype=dtype,
-#     )
-#
-#     if center:
-#         start = n_fft // 2
-#     else:
-#         start = 0
-#
-#     ifft_window_sum = util.fix_length(ifft_window_sum[..., start:], size=y.shape[-1])
-#
-#     approx_nonzero_indices = ifft_window_sum > util.tiny(ifft_window_sum)
-#
-#     y[..., approx_nonzero_indices] /= ifft_window_sum[approx_nonzero_indices]
-#
-#     return y
+@cache(level=20)
+def stft(
+    y: np.ndarray,
+    *,
+    n_fft: int = 2048,
+    hop_length: Optional[int] = None,
+    win_length: Optional[int] = None,
+    window: _WindowSpec = "hann",
+    center: bool = True,
+    dtype: Optional[DTypeLike] = None,
+    pad_mode: _PadModeSTFT = "constant",
+    out: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """Short-time Fourier transform (STFT).
+    The STFT represents a signal in the time-frequency domain by
+    computing discrete Fourier transforms (DFT) over short overlapping
+    windows.
+    This function returns a complex-valued matrix D such that
+    - ``np.abs(D[..., f, t])`` is the magnitude of frequency bin ``f``
+      at frame ``t``, and
+    - ``np.angle(D[..., f, t])`` is the phase of frequency bin ``f``
+      at frame ``t``.
+    The integers ``t`` and ``f`` can be converted to physical units by means
+    of the utility functions `frames_to_samples` and `fft_frequencies`.
+    Parameters
+    ----------
+    y : np.ndarray [shape=(..., n)], real-valued
+        input signal. Multi-channel is supported.
+    n_fft : int > 0 [scalar]
+        length of the windowed signal after padding with zeros.
+        The number of rows in the STFT matrix ``D`` is ``(1 + n_fft/2)``.
+        The default value, ``n_fft=2048`` samples, corresponds to a physical
+        duration of 93 milliseconds at a sample rate of 22050 Hz, i.e. the
+        default sample rate in librosa. This value is well adapted for music
+        signals. However, in speech processing, the recommended value is 512,
+        corresponding to 23 milliseconds at a sample rate of 22050 Hz.
+        In any case, we recommend setting ``n_fft`` to a power of two for
+        optimizing the speed of the fast Fourier transform (FFT) algorithm.
+    hop_length : int > 0 [scalar]
+        number of audio samples between adjacent STFT columns.
+        Smaller values increase the number of columns in ``D`` without
+        affecting the frequency resolution of the STFT.
+        If unspecified, defaults to ``win_length // 4`` (see below).
+    win_length : int <= n_fft [scalar]
+        Each frame of audio is windowed by ``window`` of length ``win_length``
+        and then padded with zeros to match ``n_fft``.
+        Smaller values improve the temporal resolution of the STFT (i.e. the
+        ability to discriminate impulses that are closely spaced in time)
+        at the expense of frequency resolution (i.e. the ability to discriminate
+        pure tones that are closely spaced in frequency). This effect is known
+        as the time-frequency localization trade-off and needs to be adjusted
+        according to the properties of the input signal ``y``.
+        If unspecified, defaults to ``win_length = n_fft``.
+    window : string, tuple, number, function, or np.ndarray [shape=(n_fft,)]
+        Either:
+        - a window specification (string, tuple, or number);
+          see `scipy.signal.get_window`
+        - a window function, such as `scipy.signal.windows.hann`
+        - a vector or array of length ``n_fft``
+        Defaults to a raised cosine window (`'hann'`), which is adequate for
+        most applications in audio signal processing.
+        .. see also:: `filters.get_window`
+    center : boolean
+        If ``True``, the signal ``y`` is padded so that frame
+        ``D[:, t]`` is centered at ``y[t * hop_length]``.
+        If ``False``, then ``D[:, t]`` begins at ``y[t * hop_length]``.
+        Defaults to ``True``,  which simplifies the alignment of ``D`` onto a
+        time grid by means of `librosa.frames_to_samples`.
+        Note, however, that ``center`` must be set to `False` when analyzing
+        signals with `librosa.stream`.
+        .. see also:: `librosa.stream`
+    dtype : np.dtype, optional
+        Complex numeric type for ``D``.  Default is inferred to match the
+        precision of the input signal.
+    pad_mode : string or function
+        If ``center=True``, this argument is passed to `np.pad` for padding
+        the edges of the signal ``y``. By default (``pad_mode="constant"``),
+        ``y`` is padded on both sides with zeros.
+        .. note:: Not all padding modes supported by `numpy.pad` are supported here.
+            `wrap`, `mean`, `maximum`, `median`, and `minimum` are not supported.
+            Other modes that depend at most on input values at the edges of the
+            signal (e.g., `constant`, `edge`, `linear_ramp`) are supported.
+        If ``center=False``,  this argument is ignored.
+        .. see also:: `numpy.pad`
+    out : np.ndarray or None
+        A pre-allocated, complex-valued array to store the STFT results.
+        This must be of compatible shape and dtype for the given input parameters.
+        If `out` is larger than necessary for the provided input signal, then only
+        a prefix slice of `out` will be used.
+        If not provided, a new array is allocated and returned.
+    Returns
+    -------
+    D : np.ndarray [shape=(..., 1 + n_fft/2, n_frames), dtype=dtype]
+        Complex-valued matrix of short-term Fourier transform
+        coefficients.
+        If a pre-allocated `out` array is provided, then `D` will be
+        a reference to `out`.
+        If `out` is larger than necessary, then `D` will be a sliced
+        view: `D = out[..., :n_frames]`.
+    See Also
+    --------
+    istft : Inverse STFT
+    reassigned_spectrogram : Time-frequency reassigned spectrogram
+    Notes
+    -----
+    This function caches at level 20.
+    Examples
+    --------
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'))
+    # >>> S = np.abs(librosa.stft(y))
+    # >>> S
+    # array([[5.395e-03, 3.332e-03, ..., 9.862e-07, 1.201e-05],
+    #        [3.244e-03, 2.690e-03, ..., 9.536e-07, 1.201e-05],
+    #        ...,
+    #        [7.523e-05, 3.722e-05, ..., 1.188e-04, 1.031e-03],
+    #        [7.640e-05, 3.944e-05, ..., 5.180e-04, 1.346e-03]],
+    #       dtype=float32)
+    # Use left-aligned frames, instead of centered frames
+    # >>> S_left = librosa.stft(y, center=False)
+    # Use a shorter hop length
+    # >>> D_short = librosa.stft(y, hop_length=64)
+    # Display a spectrogram
+    # >>> import matplotlib.pyplot as plt
+    # >>> fig, ax = plt.subplots()
+    # >>> img = librosa.display.specshow(librosa.amplitude_to_db(S,
+    # ...                                                        ref=np.max),
+    # ...                                y_axis='log', x_axis='time', ax=ax)
+    # >>> ax.set_title('Power spectrogram')
+    # >>> fig.colorbar(img, ax=ax, format="%+2.0f dB")
+    """
+
+    # By default, use the entire frame
+    if win_length is None:
+        win_length = n_fft
+
+    # Set the default hop, if it's not already specified
+    if hop_length is None:
+        hop_length = int(win_length // 4)
+    elif not is_positive_int(hop_length):
+        raise ParameterError(f"hop_length={hop_length} must be a positive integer")
+
+    # Check audio is valid
+    valid_audio(y, mono=False)
+
+    fft_window = get_window(window, win_length, fftbins=True)
+
+    # Pad the window out to n_fft size
+    fft_window = pad_center(fft_window, size=n_fft)
+
+    # Reshape so that the window can be broadcast
+    fft_window = expand_to(fft_window, ndim=1 + y.ndim, axes=-2)
+
+    # Pad the time series so that frames are centered
+    if center:
+        if pad_mode in ("wrap", "maximum", "mean", "median", "minimum"):
+            # Note: padding with a user-provided function "works", but
+            # use at your own risk.
+            # Since we don't pass-through kwargs here, any arguments
+            # to a user-provided pad function should be encapsulated
+            # by using functools.partial:
+            #
+            # >>> my_pad_func = functools.partial(pad_func, foo=x, bar=y)
+            # >>> librosa.stft(..., pad_mode=my_pad_func)
+
+            raise ParameterError(
+                f"pad_mode='{pad_mode}' is not supported by librosa.stft"
+            )
+
+        if n_fft > y.shape[-1]:
+            warnings.warn(
+                f"n_fft={n_fft} is too large for input signal of length={y.shape[-1]}"
+            )
+
+        # Set up the padding array to be empty, and we'll fix the target dimension later
+        padding = [(0, 0) for _ in range(y.ndim)]
+
+        # How many frames depend on left padding?
+        start_k = int(np.ceil(n_fft // 2 / hop_length))
+
+        # What's the first frame that depends on extra right-padding?
+        tail_k = (y.shape[-1] + n_fft // 2 - n_fft) // hop_length + 1
+
+        if tail_k <= start_k:
+            # If tail and head overlap, then just copy-pad the signal and carry on
+            start = 0
+            extra = 0
+            padding[-1] = (n_fft // 2, n_fft // 2)
+            y = np.pad(y, padding, mode=pad_mode)
+        else:
+            # If tail and head do not overlap, then we can implement padding on each part separately
+            # and avoid a full copy-pad
+
+            # "Middle" of the signal starts here, and does not depend on head padding
+            start = start_k * hop_length - n_fft // 2
+            padding[-1] = (n_fft // 2, 0)
+
+            # +1 here is to ensure enough samples to fill the window
+            # fixes bug #1567
+            y_pre = np.pad(
+                y[..., : (start_k - 1) * hop_length - n_fft // 2 + n_fft + 1],
+                padding,
+                mode=pad_mode,
+            )
+            y_frames_pre = frame(y_pre, frame_length=n_fft, hop_length=hop_length)
+            # Trim this down to the exact number of frames we should have
+            y_frames_pre = y_frames_pre[..., :start_k]
+
+            # How many extra frames do we have from the head?
+            extra = y_frames_pre.shape[-1]
+
+            # Determine if we have any frames that will fit inside the tail pad
+            if tail_k * hop_length - n_fft // 2 + n_fft <= y.shape[-1] + n_fft // 2:
+                padding[-1] = (0, n_fft // 2)
+                y_post = np.pad(
+                    y[..., (tail_k) * hop_length - n_fft // 2 :], padding, mode=pad_mode
+                )
+                y_frames_post = frame(
+                    y_post, frame_length=n_fft, hop_length=hop_length
+                )
+                # How many extra frames do we have from the tail?
+                extra += y_frames_post.shape[-1]
+            else:
+                # In this event, the first frame that touches tail padding would run off
+                # the end of the padded array
+                # We'll circumvent this by allocating an empty frame buffer for the tail
+                # this keeps the subsequent logic simple
+                post_shape = list(y_frames_pre.shape)
+                post_shape[-1] = 0
+                y_frames_post = np.empty_like(y_frames_pre, shape=post_shape)
+    else:
+        if n_fft > y.shape[-1]:
+            raise ParameterError(
+                f"n_fft={n_fft} is too large for uncentered analysis of input signal of length={y.shape[-1]}"
+            )
+
+        # "Middle" of the signal starts at sample 0
+        start = 0
+        # We have no extra frames
+        extra = 0
+
+    fft = get_fftlib()
+
+    if dtype is None:
+        dtype = dtype_r2c(y.dtype)
+
+    # Window the time series.
+    y_frames = frame(y[..., start:], frame_length=n_fft, hop_length=hop_length)
+
+    # Pre-allocate the STFT matrix
+    shape = list(y_frames.shape)
+
+    # This is our frequency dimension
+    shape[-2] = 1 + n_fft // 2
+
+    # If there's padding, there will be extra head and tail frames
+    shape[-1] += extra
+
+    if out is None:
+        stft_matrix = np.zeros(shape, dtype=dtype, order="F")
+    elif not (np.allclose(out.shape[:-1], shape[:-1]) and out.shape[-1] >= shape[-1]):
+        raise ParameterError(
+            f"Shape mismatch for provided output array out.shape={out.shape} and target shape={shape}"
+        )
+    elif not np.iscomplexobj(out):
+        raise ParameterError(f"output with dtype={out.dtype} is not of complex type")
+    else:
+        if np.allclose(shape, out.shape):
+            stft_matrix = out
+        else:
+            stft_matrix = out[..., : shape[-1]]
+
+    # Fill in the warm-up
+    if center and extra > 0:
+        off_start = y_frames_pre.shape[-1]
+        stft_matrix[..., :off_start] = fft.rfft(fft_window * y_frames_pre, axis=-2)
+
+        off_end = y_frames_post.shape[-1]
+        if off_end > 0:
+            stft_matrix[..., -off_end:] = fft.rfft(fft_window * y_frames_post, axis=-2)
+    else:
+        off_start = 0
+
+    n_columns = int(
+        MAX_MEM_BLOCK // (np.prod(y_frames.shape[:-1]) * y_frames.itemsize)
+    )
+    n_columns = max(n_columns, 1)
+
+    for bl_s in range(0, y_frames.shape[-1], n_columns):
+        bl_t = min(bl_s + n_columns, y_frames.shape[-1])
+
+        stft_matrix[..., bl_s + off_start : bl_t + off_start] = fft.rfft(
+            fft_window * y_frames[..., bl_s:bl_t], axis=-2
+        )
+    return stft_matrix
+
+
+@cache(level=30)
+def istft(
+    stft_matrix: np.ndarray,
+    *,
+    hop_length: Optional[int] = None,
+    win_length: Optional[int] = None,
+    n_fft: Optional[int] = None,
+    window: _WindowSpec = "hann",
+    center: bool = True,
+    dtype: Optional[DTypeLike] = None,
+    length: Optional[int] = None,
+    out: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """
+    Inverse short-time Fourier transform (ISTFT).
+    Converts a complex-valued spectrogram ``stft_matrix`` to time-series ``y``
+    by minimizing the mean squared error between ``stft_matrix`` and STFT of
+    ``y`` as described in [#]_ up to Section 2 (reconstruction from MSTFT).
+    In general, window function, hop length and other parameters should be same
+    as in stft, which mostly leads to perfect reconstruction of a signal from
+    unmodified ``stft_matrix``.
+    .. [#] D. W. Griffin and J. S. Lim,
+        "Signal estimation from modified short-time Fourier transform,"
+        IEEE Trans. ASSP, vol.32, no.2, pp.236–243, Apr. 1984.
+    Parameters
+    ----------
+    stft_matrix : np.ndarray [shape=(..., 1 + n_fft//2, t)]
+        STFT matrix from ``stft``
+    hop_length : int > 0 [scalar]
+        Number of frames between STFT columns.
+        If unspecified, defaults to ``win_length // 4``.
+    win_length : int <= n_fft = 2 * (stft_matrix.shape[0] - 1)
+        When reconstructing the time series, each frame is windowed
+        and each sample is normalized by the sum of squared window
+        according to the ``window`` function (see below).
+        If unspecified, defaults to ``n_fft``.
+    n_fft : int > 0 or None
+        The number of samples per frame in the input spectrogram.
+        By default, this will be inferred from the shape of ``stft_matrix``.
+        However, if an odd frame length was used, you can specify the correct
+        length by setting ``n_fft``.
+    window : string, tuple, number, function, np.ndarray [shape=(n_fft,)]
+        - a window specification (string, tuple, or number);
+          see `scipy.signal.get_window`
+        - a window function, such as `scipy.signal.windows.hann`
+        - a user-specified window vector of length ``n_fft``
+        .. see also:: `filters.get_window`
+    center : boolean
+        - If ``True``, ``D`` is assumed to have centered frames.
+        - If ``False``, ``D`` is assumed to have left-aligned frames.
+    dtype : numeric type
+        Real numeric type for ``y``.  Default is to match the numerical
+        precision of the input spectrogram.
+    length : int > 0, optional
+        If provided, the output ``y`` is zero-padded or clipped to exactly
+        ``length`` samples.
+    out : np.ndarray or None
+        A pre-allocated, complex-valued array to store the reconstructed signal
+        ``y``.  This must be of the correct shape for the given input parameters.
+        If not provided, a new array is allocated and returned.
+    Returns
+    -------
+    y : np.ndarray [shape=(..., n)]
+        time domain signal reconstructed from ``stft_matrix``.
+        If ``stft_matrix`` contains more than two axes
+        (e.g., from a stereo input signal), then ``y`` will match shape on the leading dimensions.
+    See Also
+    --------
+    stft : Short-time Fourier Transform
+    Notes
+    -----
+    This function caches at level 30.
+    Examples
+    --------
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'))
+    # >>> D = librosa.stft(y)
+    # >>> y_hat = librosa.istft(D)
+    # >>> y_hat
+    # array([-1.407e-03, -4.461e-04, ...,  5.131e-06, -1.417e-05],
+    #       dtype=float32)
+    # Exactly preserving length of the input signal requires explicit padding.
+    # Otherwise, a partial frame at the end of ``y`` will not be represented.
+    # >>> n = len(y)
+    # >>> n_fft = 2048
+    # >>> y_pad = librosa.util.fix_length(y, size=n + n_fft // 2)
+    # >>> D = librosa.stft(y_pad, n_fft=n_fft)
+    # >>> y_out = librosa.istft(D, length=n)
+    # >>> np.max(np.abs(y - y_out))
+    # 8.940697e-08
+    """
+
+    if n_fft is None:
+        n_fft = 2 * (stft_matrix.shape[-2] - 1)
+
+    # By default, use the entire frame
+    if win_length is None:
+        win_length = n_fft
+
+    # Set the default hop, if it's not already specified
+    if hop_length is None:
+        hop_length = int(win_length // 4)
+
+    ifft_window = get_window(window, win_length, fftbins=True)
+
+    # Pad out to match n_fft, and add broadcasting axes
+    ifft_window = pad_center(ifft_window, size=n_fft)
+    ifft_window = expand_to(ifft_window, ndim=stft_matrix.ndim, axes=-2)
+
+    # For efficiency, trim STFT frames according to signal length if available
+    if length:
+        if center:
+            padded_length = length + 2 * (n_fft // 2)
+        else:
+            padded_length = length
+        n_frames = min(stft_matrix.shape[-1], int(np.ceil(padded_length / hop_length)))
+    else:
+        n_frames = stft_matrix.shape[-1]
+
+    if dtype is None:
+        dtype = dtype_c2r(stft_matrix.dtype)
+
+    shape = list(stft_matrix.shape[:-2])
+    expected_signal_len = n_fft + hop_length * (n_frames - 1)
+
+    if length:
+        expected_signal_len = length
+    elif center:
+        expected_signal_len -= 2 * (n_fft // 2)
+
+    shape.append(expected_signal_len)
+
+    if out is None:
+        y = np.zeros(shape, dtype=dtype)
+    elif not np.allclose(out.shape, shape):
+        raise ParameterError(
+            f"Shape mismatch for provided output array out.shape={out.shape} != {shape}"
+        )
+    else:
+        y = out
+        # Since we'll be doing overlap-add here, this needs to be initialized to zero.
+        y.fill(0.0)
+
+    fft = get_fftlib()
+
+    if center:
+        # First frame that does not depend on padding
+        #  k * hop_length - n_fft//2 >= 0
+        # k * hop_length >= n_fft // 2
+        # k >= (n_fft//2 / hop_length)
+
+        start_frame = int(np.ceil((n_fft // 2) / hop_length))
+
+        # Do overlap-add on the head block
+        ytmp = ifft_window * fft.irfft(stft_matrix[..., :start_frame], n=n_fft, axis=-2)
+
+        shape[-1] = n_fft + hop_length * (start_frame - 1)
+        head_buffer = np.zeros(shape, dtype=dtype)
+
+        __overlap_add(head_buffer, ytmp, hop_length)
+
+        # If y is smaller than the head buffer, take everything
+        if y.shape[-1] < shape[-1] - n_fft // 2:
+            y[..., :] = head_buffer[..., n_fft // 2 : y.shape[-1] + n_fft // 2]
+        else:
+            # Trim off the first n_fft//2 samples from the head and copy into target buffer
+            y[..., : shape[-1] - n_fft // 2] = head_buffer[..., n_fft // 2 :]
+
+        # This offset compensates for any differences between frame alignment
+        # and padding truncation
+        offset = start_frame * hop_length - n_fft // 2
+
+    else:
+        start_frame = 0
+        offset = 0
+
+    n_columns = int(
+        MAX_MEM_BLOCK // (np.prod(stft_matrix.shape[:-1]) * stft_matrix.itemsize)
+    )
+    n_columns = max(n_columns, 1)
+
+    frame = 0
+    for bl_s in range(start_frame, n_frames, n_columns):
+        bl_t = min(bl_s + n_columns, n_frames)
+
+        # invert the block and apply the window function
+        ytmp = ifft_window * fft.irfft(stft_matrix[..., bl_s:bl_t], n=n_fft, axis=-2)
+
+        # Overlap-add the istft block starting at the i'th frame
+        __overlap_add(y[..., frame * hop_length + offset :], ytmp, hop_length)
+
+        frame += bl_t - bl_s
+
+    # Normalize by sum of squared window
+    ifft_window_sum = window_sumsquare(
+        window=window,
+        n_frames=n_frames,
+        win_length=win_length,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        dtype=dtype,
+    )
+
+    if center:
+        start = n_fft // 2
+    else:
+        start = 0
+
+    ifft_window_sum = fix_length(ifft_window_sum[..., start:], size=y.shape[-1])
+
+    approx_nonzero_indices = ifft_window_sum > tiny(ifft_window_sum)
+
+    y[..., approx_nonzero_indices] /= ifft_window_sum[approx_nonzero_indices]
+
+    return y
 
 
 @jit(nopython=True, cache=True)
@@ -614,16 +617,15 @@ def __overlap_add(y, ytmp, hop_length):
 def __reassign_frequencies(
     y: np.ndarray,
     sr: float = 22050,
-    S: np.ndarray = None,
+    S: Optional[np.ndarray] = None,
     n_fft: int = 2048,
-    hop_length: int = None,
-    win_length: int = None,
+    hop_length: Optional[int] = None,
+    win_length: Optional[int] = None,
     window: _WindowSpec = "hann",
     center: bool = True,
-    dtype: DTypeLike = None,
+    dtype: Optional[DTypeLike] = None,
     pad_mode: _PadModeSTFT = "constant",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
+) -> Tuple[np.ndarray, np.ndarray]:
     """Instantaneous frequencies based on a spectrogram representation.
     The reassignment vector is calculated using equation 5.20 in Flandrin,
     Auger, & Chassande-Mottin 2002::
@@ -705,11 +707,11 @@ def __reassign_frequencies(
         win_length = n_fft
 
     window = get_window(window, win_length, fftbins=True)
-    window = util.pad_center(window, size=n_fft)
+    window = pad_center(window, size=n_fft)
 
     if S is None:
         if dtype is None:
-            dtype = util.dtype_r2c(y.dtype)
+            dtype = dtype_r2c(y.dtype)
 
         S_h = stft(
             y=y,
@@ -728,7 +730,7 @@ def __reassign_frequencies(
         S_h = S
 
     # cyclic gradient to correctly handle edges of a periodic window
-    window_derivative = util.cyclic_gradient(window)
+    window_derivative = cyclic_gradient(window)
 
     S_dh = stft(
         y=y,
@@ -746,7 +748,7 @@ def __reassign_frequencies(
     correction = -np.imag(S_dh / S_h)
 
     freqs = convert.fft_frequencies(sr=sr, n_fft=n_fft)
-    freqs = util.expand_to(freqs, ndim=correction.ndim, axes=-2) + correction * (
+    freqs = expand_to(freqs, ndim=correction.ndim, axes=-2) + correction * (
         0.5 * sr / np.pi
     )
 
@@ -830,14 +832,14 @@ def __reassign_times(
     reassigned_spectrogram : Time-frequency reassigned spectrogram
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.ex('trumpet'))
-    >>> times, S = librosa.core.spectrum.__reassign_times(y, sr=sr)
-    >>> times
-    array([[ 2.268e-05,  1.144e-02, ...,  5.332e+00,  5.333e+00],
-           [ 2.268e-05,  1.451e-02, ...,  5.334e+00,  5.333e+00],
-           ...,
-           [ 2.268e-05, -6.177e-04, ...,  5.368e+00,  5.327e+00],
-           [ 2.268e-05,  1.420e-03, ...,  5.307e+00,  5.328e+00]])
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'))
+    # >>> times, S = librosa.core.spectrum.__reassign_times(y, sr=sr)
+    # >>> times
+    # array([[ 2.268e-05,  1.144e-02, ...,  5.332e+00,  5.333e+00],
+    #        [ 2.268e-05,  1.451e-02, ...,  5.334e+00,  5.333e+00],
+    #        ...,
+    #        [ 2.268e-05, -6.177e-04, ...,  5.368e+00,  5.327e+00],
+    #        [ 2.268e-05,  1.420e-03, ...,  5.307e+00,  5.328e+00]])
     """
 
     # retrieve window samples if needed so that the time-weighted window can be
@@ -846,7 +848,7 @@ def __reassign_times(
         win_length = n_fft
 
     window = get_window(window, win_length, fftbins=True)
-    window = util.pad_center(window, size=n_fft)
+    window = pad_center(window, size=n_fft)
 
     # retrieve hop length if needed so that the frame times can be calculated
     if hop_length is None:
@@ -854,7 +856,7 @@ def __reassign_times(
 
     if S is None:
         if dtype is None:
-            dtype = util.dtype_r2c(y.dtype)
+            dtype = dtype_r2c(y.dtype)
         S_h = stft(
             y=y,
             n_fft=n_fft,
@@ -1271,16 +1273,16 @@ def phase_vocoder(
     .. [#] https://breakfastquay.com/rubberband/
     Examples
     --------
-    >>> # Play at double speed
-    >>> y, sr   = librosa.load(librosa.ex('trumpet'))
-    >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
-    >>> D_fast  = librosa.phase_vocoder(D, rate=2.0, hop_length=512)
-    >>> y_fast  = librosa.istft(D_fast, hop_length=512)
-    >>> # Or play at 1/3 speed
-    >>> y, sr   = librosa.load(librosa.ex('trumpet'))
-    >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
-    >>> D_slow  = librosa.phase_vocoder(D, rate=1./3, hop_length=512)
-    >>> y_slow  = librosa.istft(D_slow, hop_length=512)
+    # >>> # Play at double speed
+    # >>> y, sr   = librosa.load(librosa.ex('trumpet'))
+    # >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
+    # >>> D_fast  = librosa.phase_vocoder(D, rate=2.0, hop_length=512)
+    # >>> y_fast  = librosa.istft(D_fast, hop_length=512)
+    # >>> # Or play at 1/3 speed
+    # >>> y, sr   = librosa.load(librosa.ex('trumpet'))
+    # >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
+    # >>> D_slow  = librosa.phase_vocoder(D, rate=1./3, hop_length=512)
+    # >>> y_slow  = librosa.istft(D_slow, hop_length=512)
     Parameters
     ----------
     D : np.ndarray [shape=(..., d, t), dtype=complex]
@@ -1428,26 +1430,26 @@ def iirt(
     scipy.signal.sosfiltfilt
     Examples
     --------
-    >>> import matplotlib.pyplot as plt
-    >>> y, sr = librosa.load(librosa.ex('trumpet'), duration=3)
-    >>> D = np.abs(librosa.iirt(y))
-    >>> C = np.abs(librosa.cqt(y=y, sr=sr))
-    >>> fig, ax = plt.subplots(nrows=2, sharex=True, sharey=True)
-    >>> img = librosa.display.specshow(librosa.amplitude_to_db(C, ref=np.max),
-    ...                                y_axis='cqt_hz', x_axis='time', ax=ax[0])
-    >>> ax[0].set(title='Constant-Q transform')
-    >>> ax[0].label_outer()
-    >>> img = librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
-    ...                                y_axis='cqt_hz', x_axis='time', ax=ax[1])
-    >>> ax[1].set_title('Semitone spectrogram (iirt)')
-    >>> fig.colorbar(img, ax=ax, format="%+2.0f dB")
+    # >>> import matplotlib.pyplot as plt
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'), duration=3)
+    # >>> D = np.abs(librosa.iirt(y))
+    # >>> C = np.abs(librosa.cqt(y=y, sr=sr))
+    # >>> fig, ax = plt.subplots(nrows=2, sharex=True, sharey=True)
+    # >>> img = librosa.display.specshow(librosa.amplitude_to_db(C, ref=np.max),
+    # ...                                y_axis='cqt_hz', x_axis='time', ax=ax[0])
+    # >>> ax[0].set(title='Constant-Q transform')
+    # >>> ax[0].label_outer()
+    # >>> img = librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
+    # ...                                y_axis='cqt_hz', x_axis='time', ax=ax[1])
+    # >>> ax[1].set_title('Semitone spectrogram (iirt)')
+    # >>> fig.colorbar(img, ax=ax, format="%+2.0f dB")
     """
 
     if flayout not in ("ba", "sos"):
         raise ParameterError(f"Unsupported flayout={flayout}")
 
     # check audio input
-    util.valid_audio(y, mono=False)
+    valid_audio(y, mono=False)
 
     # Set the default hop, if it's not already specified
     if hop_length is None:
@@ -1513,7 +1515,7 @@ def iirt(
             min_length = (
                 int(np.ceil(n_frames * hop_length_STMSP)) + win_length_STMSP_round
             )
-            cur_filter_output = util.fix_length(cur_filter_output, size=min_length)
+            cur_filter_output = fix_length(cur_filter_output, size=min_length)
             start_idx = np.arange(
                 0,
                 cur_filter_output.shape[-1] - win_length_STMSP_round,
@@ -1774,34 +1776,34 @@ def perceptual_weighting(
     Examples
     --------
     Re-weight a CQT power spectrum, using peak power as reference
-    >>> y, sr = librosa.load(librosa.ex('trumpet'))
-    >>> C = np.abs(librosa.cqt(y, sr=sr, fmin=librosa.note_to_hz('A1')))
-    >>> freqs = librosa.cqt_frequencies(C.shape[0],
-    ...                                 fmin=librosa.note_to_hz('A1'))
-    >>> perceptual_CQT = librosa.perceptual_weighting(C**2,
-    ...                                               freqs,
-    ...                                               ref=np.max)
-    >>> perceptual_CQT
-    array([[ -96.528,  -97.101, ..., -108.561, -108.561],
-           [ -95.88 ,  -96.479, ..., -107.551, -107.551],
-           ...,
-           [ -65.142,  -53.256, ...,  -80.098,  -80.098],
-           [ -71.542,  -53.197, ...,  -80.311,  -80.311]])
-    >>> import matplotlib.pyplot as plt
-    >>> fig, ax = plt.subplots(nrows=2, sharex=True, sharey=True)
-    >>> img = librosa.display.specshow(librosa.amplitude_to_db(C,
-    ...                                                        ref=np.max),
-    ...                                fmin=librosa.note_to_hz('A1'),
-    ...                                y_axis='cqt_hz', x_axis='time',
-    ...                                ax=ax[0])
-    >>> ax[0].set(title='Log CQT power')
-    >>> ax[0].label_outer()
-    >>> imgp = librosa.display.specshow(perceptual_CQT, y_axis='cqt_hz',
-    ...                                 fmin=librosa.note_to_hz('A1'),
-    ...                                 x_axis='time', ax=ax[1])
-    >>> ax[1].set(title='Perceptually weighted log CQT')
-    >>> fig.colorbar(img, ax=ax[0], format="%+2.0f dB")
-    >>> fig.colorbar(imgp, ax=ax[1], format="%+2.0f dB")
+    # >>> y, sr = librosa.load(librosa.ex('trumpet'))
+    # >>> C = np.abs(librosa.cqt(y, sr=sr, fmin=librosa.note_to_hz('A1')))
+    # >>> freqs = librosa.cqt_frequencies(C.shape[0],
+    # ...                                 fmin=librosa.note_to_hz('A1'))
+    # >>> perceptual_CQT = librosa.perceptual_weighting(C**2,
+    # ...                                               freqs,
+    # ...                                               ref=np.max)
+    # >>> perceptual_CQT
+    # array([[ -96.528,  -97.101, ..., -108.561, -108.561],
+    #        [ -95.88 ,  -96.479, ..., -107.551, -107.551],
+    #        ...,
+    #        [ -65.142,  -53.256, ...,  -80.098,  -80.098],
+    #        [ -71.542,  -53.197, ...,  -80.311,  -80.311]])
+    # >>> import matplotlib.pyplot as plt
+    # >>> fig, ax = plt.subplots(nrows=2, sharex=True, sharey=True)
+    # >>> img = librosa.display.specshow(librosa.amplitude_to_db(C,
+    # ...                                                        ref=np.max),
+    # ...                                fmin=librosa.note_to_hz('A1'),
+    # ...                                y_axis='cqt_hz', x_axis='time',
+    # ...                                ax=ax[0])
+    # >>> ax[0].set(title='Log CQT power')
+    # >>> ax[0].label_outer()
+    # >>> imgp = librosa.display.specshow(perceptual_CQT, y_axis='cqt_hz',
+    # ...                                 fmin=librosa.note_to_hz('A1'),
+    # ...                                 x_axis='time', ax=ax[1])
+    # >>> ax[1].set(title='Perceptually weighted log CQT')
+    # >>> fig.colorbar(img, ax=ax[0], format="%+2.0f dB")
+    # >>> fig.colorbar(imgp, ax=ax[1], format="%+2.0f dB")
     """
 
     offset = convert.frequency_weighting(frequencies, kind=kind).reshape((-1, 1))
@@ -3553,7 +3555,7 @@ def db_to_power(S_db, ref=1.0):
 
 @cache(level=30)
 def amplitude_to_db(S, ref=1.0, amin=1e-5, top_db=80.0):
-    '''Convert an amplitude spectrogram to dB-scaled spectrogram.
+    """Convert an amplitude spectrogram to dB-scaled spectrogram.
 
     This is equivalent to ``power_to_db(S**2)``, but is provided for convenience.
 
@@ -3589,7 +3591,7 @@ def amplitude_to_db(S, ref=1.0, amin=1e-5, top_db=80.0):
     Notes
     -----
     This function caches at level 30.
-    '''
+    """
 
     S = np.asarray(S)
 
@@ -3614,7 +3616,7 @@ def amplitude_to_db(S, ref=1.0, amin=1e-5, top_db=80.0):
 
 @cache(level=30)
 def db_to_amplitude(S_db, ref=1.0):
-    '''Convert a dB-scaled spectrogram to an amplitude spectrogram.
+    """Convert a dB-scaled spectrogram to an amplitude spectrogram.
 
     This effectively inverts `amplitude_to_db`:
 
@@ -3636,13 +3638,13 @@ def db_to_amplitude(S_db, ref=1.0):
     Notes
     -----
     This function caches at level 30.
-    '''
+    """
     return db_to_power(S_db, ref=ref**2)**0.5
 
 
 @cache(level=30)
 def perceptual_weighting(S, frequencies, **kwargs):
-    '''Perceptual weighting of a power spectrogram:
+    """Perceptual weighting of a power spectrogram:
 
     `S_p[f] = A_weighting(f) + 10*log(S[f] / ref)`
 
@@ -3675,37 +3677,37 @@ def perceptual_weighting(S, frequencies, **kwargs):
     --------
     Re-weight a CQT power spectrum, using peak power as reference
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> CQT = librosa.cqt(y, sr=sr, fmin=librosa.note_to_hz('A1'))
-    >>> freqs = librosa.cqt_frequencies(CQT.shape[0],
-    ...                                 fmin=librosa.note_to_hz('A1'))
-    >>> perceptual_CQT = librosa.perceptual_weighting(CQT**2,
-    ...                                               freqs,
-    ...                                               ref=np.max)
-    >>> perceptual_CQT
-    array([[ -80.076,  -80.049, ..., -104.735, -104.735],
-           [ -78.344,  -78.555, ..., -103.725, -103.725],
-           ...,
-           [ -76.272,  -76.272, ...,  -76.272,  -76.272],
-           [ -76.485,  -76.485, ...,  -76.485,  -76.485]])
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> plt.subplot(2, 1, 1)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(CQT,
-    ...                                                  ref=np.max),
-    ...                          fmin=librosa.note_to_hz('A1'),
-    ...                          y_axis='cqt_hz')
-    >>> plt.title('Log CQT power')
-    >>> plt.colorbar(format='%+2.0f dB')
-    >>> plt.subplot(2, 1, 2)
-    >>> librosa.display.specshow(perceptual_CQT, y_axis='cqt_hz',
-    ...                          fmin=librosa.note_to_hz('A1'),
-    ...                          x_axis='time')
-    >>> plt.title('Perceptually weighted log CQT')
-    >>> plt.colorbar(format='%+2.0f dB')
-    >>> plt.tight_layout()
-    '''
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> CQT = librosa.cqt(y, sr=sr, fmin=librosa.note_to_hz('A1'))
+    # >>> freqs = librosa.cqt_frequencies(CQT.shape[0],
+    # ...                                 fmin=librosa.note_to_hz('A1'))
+    # >>> perceptual_CQT = librosa.perceptual_weighting(CQT**2,
+    # ...                                               freqs,
+    # ...                                               ref=np.max)
+    # >>> perceptual_CQT
+    # array([[ -80.076,  -80.049, ..., -104.735, -104.735],
+    #        [ -78.344,  -78.555, ..., -103.725, -103.725],
+    #        ...,
+    #        [ -76.272,  -76.272, ...,  -76.272,  -76.272],
+    #        [ -76.485,  -76.485, ...,  -76.485,  -76.485]])
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> plt.subplot(2, 1, 1)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(CQT,
+    # ...                                                  ref=np.max),
+    # ...                          fmin=librosa.note_to_hz('A1'),
+    # ...                          y_axis='cqt_hz')
+    # >>> plt.title('Log CQT power')
+    # >>> plt.colorbar(format='%+2.0f dB')
+    # >>> plt.subplot(2, 1, 2)
+    # >>> librosa.display.specshow(perceptual_CQT, y_axis='cqt_hz',
+    # ...                          fmin=librosa.note_to_hz('A1'),
+    # ...                          x_axis='time')
+    # >>> plt.title('Perceptually weighted log CQT')
+    # >>> plt.colorbar(format='%+2.0f dB')
+    # >>> plt.tight_layout()
+    """
 
     offset = A_weighting(frequencies).reshape((-1, 1))
 
@@ -3782,67 +3784,67 @@ def fmt(y, t_min=0.5, n_fmt=None, kind='cubic', beta=0.5, over_sample=1, axis=-1
 
     Examples
     --------
-    >>> # Generate a signal and time-stretch it (with energy normalization)
-    >>> scale = 1.25
-    >>> freq = 3.0
-    >>> x1 = np.linspace(0, 1, num=1024, endpoint=False)
-    >>> x2 = np.linspace(0, 1, num=scale * len(x1), endpoint=False)
-    >>> y1 = np.sin(2 * np.pi * freq * x1)
-    >>> y2 = np.sin(2 * np.pi * freq * x2) / np.sqrt(scale)
-    >>> # Verify that the two signals have the same energy
-    >>> np.sum(np.abs(y1)**2), np.sum(np.abs(y2)**2)
-        (255.99999999999997, 255.99999999999969)
-    >>> scale1 = librosa.fmt(y1, n_fmt=512)
-    >>> scale2 = librosa.fmt(y2, n_fmt=512)
-    >>> # And plot the results
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure(figsize=(8, 4))
-    >>> plt.subplot(1, 2, 1)
-    >>> plt.plot(y1, label='Original')
-    >>> plt.plot(y2, linestyle='--', label='Stretched')
-    >>> plt.xlabel('time (samples)')
-    >>> plt.title('Input signals')
-    >>> plt.legend(frameon=True)
-    >>> plt.axis('tight')
-    >>> plt.subplot(1, 2, 2)
-    >>> plt.semilogy(np.abs(scale1), label='Original')
-    >>> plt.semilogy(np.abs(scale2), linestyle='--', label='Stretched')
-    >>> plt.xlabel('scale coefficients')
-    >>> plt.title('Scale transform magnitude')
-    >>> plt.legend(frameon=True)
-    >>> plt.axis('tight')
-    >>> plt.tight_layout()
-
-    >>> # Plot the scale transform of an onset strength autocorrelation
-    >>> y, sr = librosa.load(librosa.util.example_audio_file(),
-    ...                      offset=10.0, duration=30.0)
-    >>> odf = librosa.onset.onset_strength(y=y, sr=sr)
-    >>> # Auto-correlate with up to 10 seconds lag
-    >>> odf_ac = librosa.autocorrelate(odf, max_size=10 * sr // 512)
-    >>> # Normalize
-    >>> odf_ac = librosa.util.normalize(odf_ac, norm=np.inf)
-    >>> # Compute the scale transform
-    >>> odf_ac_scale = librosa.fmt(librosa.util.normalize(odf_ac), n_fmt=512)
-    >>> # Plot the results
-    >>> plt.figure()
-    >>> plt.subplot(3, 1, 1)
-    >>> plt.plot(odf, label='Onset strength')
-    >>> plt.axis('tight')
-    >>> plt.xlabel('Time (frames)')
-    >>> plt.xticks([])
-    >>> plt.legend(frameon=True)
-    >>> plt.subplot(3, 1, 2)
-    >>> plt.plot(odf_ac, label='Onset autocorrelation')
-    >>> plt.axis('tight')
-    >>> plt.xlabel('Lag (frames)')
-    >>> plt.xticks([])
-    >>> plt.legend(frameon=True)
-    >>> plt.subplot(3, 1, 3)
-    >>> plt.semilogy(np.abs(odf_ac_scale), label='Scale transform magnitude')
-    >>> plt.axis('tight')
-    >>> plt.xlabel('scale coefficients')
-    >>> plt.legend(frameon=True)
-    >>> plt.tight_layout()
+    # >>> # Generate a signal and time-stretch it (with energy normalization)
+    # >>> scale = 1.25
+    # >>> freq = 3.0
+    # >>> x1 = np.linspace(0, 1, num=1024, endpoint=False)
+    # >>> x2 = np.linspace(0, 1, num=scale * len(x1), endpoint=False)
+    # >>> y1 = np.sin(2 * np.pi * freq * x1)
+    # >>> y2 = np.sin(2 * np.pi * freq * x2) / np.sqrt(scale)
+    # >>> # Verify that the two signals have the same energy
+    # >>> np.sum(np.abs(y1)**2), np.sum(np.abs(y2)**2)
+    #     (255.99999999999997, 255.99999999999969)
+    # >>> scale1 = librosa.fmt(y1, n_fmt=512)
+    # >>> scale2 = librosa.fmt(y2, n_fmt=512)
+    # >>> # And plot the results
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure(figsize=(8, 4))
+    # >>> plt.subplot(1, 2, 1)
+    # >>> plt.plot(y1, label='Original')
+    # >>> plt.plot(y2, linestyle='--', label='Stretched')
+    # >>> plt.xlabel('time (samples)')
+    # >>> plt.title('Input signals')
+    # >>> plt.legend(frameon=True)
+    # >>> plt.axis('tight')
+    # >>> plt.subplot(1, 2, 2)
+    # >>> plt.semilogy(np.abs(scale1), label='Original')
+    # >>> plt.semilogy(np.abs(scale2), linestyle='--', label='Stretched')
+    # >>> plt.xlabel('scale coefficients')
+    # >>> plt.title('Scale transform magnitude')
+    # >>> plt.legend(frameon=True)
+    # >>> plt.axis('tight')
+    # >>> plt.tight_layout()
+    #
+    # >>> # Plot the scale transform of an onset strength autocorrelation
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file(),
+    # ...                      offset=10.0, duration=30.0)
+    # >>> odf = librosa.onset.onset_strength(y=y, sr=sr)
+    # >>> # Auto-correlate with up to 10 seconds lag
+    # >>> odf_ac = librosa.autocorrelate(odf, max_size=10 * sr // 512)
+    # >>> # Normalize
+    # >>> odf_ac = librosa.util.normalize(odf_ac, norm=np.inf)
+    # >>> # Compute the scale transform
+    # >>> odf_ac_scale = librosa.fmt(librosa.util.normalize(odf_ac), n_fmt=512)
+    # >>> # Plot the results
+    # >>> plt.figure()
+    # >>> plt.subplot(3, 1, 1)
+    # >>> plt.plot(odf, label='Onset strength')
+    # >>> plt.axis('tight')
+    # >>> plt.xlabel('Time (frames)')
+    # >>> plt.xticks([])
+    # >>> plt.legend(frameon=True)
+    # >>> plt.subplot(3, 1, 2)
+    # >>> plt.plot(odf_ac, label='Onset autocorrelation')
+    # >>> plt.axis('tight')
+    # >>> plt.xlabel('Lag (frames)')
+    # >>> plt.xticks([])
+    # >>> plt.legend(frameon=True)
+    # >>> plt.subplot(3, 1, 3)
+    # >>> plt.semilogy(np.abs(odf_ac_scale), label='Scale transform magnitude')
+    # >>> plt.axis('tight')
+    # >>> plt.xlabel('scale coefficients')
+    # >>> plt.legend(frameon=True)
+    # >>> plt.tight_layout()
     """
 
     n = y.shape[axis]
@@ -3945,22 +3947,22 @@ def dct(n_filters, n_input):
 
     Examples
     --------
-    >>> n_fft = 2048
-    >>> dct_filters = librosa.filters.dct(13, 1 + n_fft // 2)
-    >>> dct_filters
-    array([[ 0.031,  0.031, ...,  0.031,  0.031],
-           [ 0.044,  0.044, ..., -0.044, -0.044],
-           ...,
-           [ 0.044,  0.044, ..., -0.044, -0.044],
-           [ 0.044,  0.044, ...,  0.044,  0.044]])
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> librosa.display.specshow(dct_filters, x_axis='linear')
-    >>> plt.ylabel('DCT function')
-    >>> plt.title('DCT filter bank')
-    >>> plt.colorbar()
-    >>> plt.tight_layout()
+    # >>> n_fft = 2048
+    # >>> dct_filters = librosa.filters.dct(13, 1 + n_fft // 2)
+    # >>> dct_filters
+    # array([[ 0.031,  0.031, ...,  0.031,  0.031],
+    #        [ 0.044,  0.044, ..., -0.044, -0.044],
+    #        ...,
+    #        [ 0.044,  0.044, ..., -0.044, -0.044],
+    #        [ 0.044,  0.044, ...,  0.044,  0.044]])
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> librosa.display.specshow(dct_filters, x_axis='linear')
+    # >>> plt.ylabel('DCT function')
+    # >>> plt.title('DCT filter bank')
+    # >>> plt.colorbar()
+    # >>> plt.tight_layout()
     """
 
     basis = np.empty((n_filters, n_input))
@@ -4016,32 +4018,32 @@ def mel(sr, n_fft, n_mels=128, fmin=0.0, fmax=None, htk=False,
 
     Examples
     --------
-    >>> melfb = librosa.filters.mel(22050, 2048)
-    >>> melfb
-    array([[ 0.   ,  0.016, ...,  0.   ,  0.   ],
-           [ 0.   ,  0.   , ...,  0.   ,  0.   ],
-           ...,
-           [ 0.   ,  0.   , ...,  0.   ,  0.   ],
-           [ 0.   ,  0.   , ...,  0.   ,  0.   ]])
-
-
-    Clip the maximum frequency to 8KHz
-
-    >>> librosa.filters.mel(22050, 2048, fmax=8000)
-    array([[ 0.  ,  0.02, ...,  0.  ,  0.  ],
-           [ 0.  ,  0.  , ...,  0.  ,  0.  ],
-           ...,
-           [ 0.  ,  0.  , ...,  0.  ,  0.  ],
-           [ 0.  ,  0.  , ...,  0.  ,  0.  ]])
-
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.figure()
-    >>> librosa.display.specshow(melfb, x_axis='linear')
-    >>> plt.ylabel('Mel filter')
-    >>> plt.title('Mel filter bank')
-    >>> plt.colorbar()
-    >>> plt.tight_layout()
+    # >>> melfb = librosa.filters.mel(22050, 2048)
+    # >>> melfb
+    # array([[ 0.   ,  0.016, ...,  0.   ,  0.   ],
+    #        [ 0.   ,  0.   , ...,  0.   ,  0.   ],
+    #        ...,
+    #        [ 0.   ,  0.   , ...,  0.   ,  0.   ],
+    #        [ 0.   ,  0.   , ...,  0.   ,  0.   ]])
+    #
+    #
+    # Clip the maximum frequency to 8KHz
+    #
+    # >>> librosa.filters.mel(22050, 2048, fmax=8000)
+    # array([[ 0.  ,  0.02, ...,  0.  ,  0.  ],
+    #        [ 0.  ,  0.  , ...,  0.  ,  0.  ],
+    #        ...,
+    #        [ 0.  ,  0.  , ...,  0.  ,  0.  ],
+    #        [ 0.  ,  0.  , ...,  0.  ,  0.  ]])
+    #
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.figure()
+    # >>> librosa.display.specshow(melfb, x_axis='linear')
+    # >>> plt.ylabel('Mel filter')
+    # >>> plt.title('Mel filter bank')
+    # >>> plt.colorbar()
+    # >>> plt.tight_layout()
     """
 
     if fmax is None:
@@ -4318,34 +4320,34 @@ def constant_q(sr, fmin=None, n_bins=84, bins_per_octave=12, tuning=0.0,
     --------
     Use a shorter window for each filter
 
-    >>> basis, lengths = librosa.filters.constant_q(22050, filter_scale=0.5)
-
-    Plot one octave of filters in time and frequency
-
-    >>> import matplotlib.pyplot as plt
-    >>> basis, lengths = librosa.filters.constant_q(22050)
-    >>> plt.figure(figsize=(10, 6))
-    >>> plt.subplot(2, 1, 1)
-    >>> notes = librosa.midi_to_note(np.arange(24, 24 + len(basis)))
-    >>> for i, (f, n) in enumerate(zip(basis, notes[:12])):
-    ...     f_scale = librosa.util.normalize(f) / 2
-    ...     plt.plot(i + f_scale.real)
-    ...     plt.plot(i + f_scale.imag, linestyle=':')
-    >>> plt.axis('tight')
-    >>> plt.yticks(np.arange(len(notes[:12])), notes[:12])
-    >>> plt.ylabel('CQ filters')
-    >>> plt.title('CQ filters (one octave, time domain)')
-    >>> plt.xlabel('Time (samples at 22050 Hz)')
-    >>> plt.legend(['Real', 'Imaginary'], frameon=True, framealpha=0.8)
-    >>> plt.subplot(2, 1, 2)
-    >>> F = np.abs(np.fft.fftn(basis, axes=[-1]))
-    >>> # Keep only the positive frequencies
-    >>> F = F[:, :(1 + F.shape[1] // 2)]
-    >>> librosa.display.specshow(F, x_axis='linear')
-    >>> plt.yticks(np.arange(len(notes))[::12], notes[::12])
-    >>> plt.ylabel('CQ filters')
-    >>> plt.title('CQ filter magnitudes (frequency domain)')
-    >>> plt.tight_layout()
+    # >>> basis, lengths = librosa.filters.constant_q(22050, filter_scale=0.5)
+    #
+    # Plot one octave of filters in time and frequency
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> basis, lengths = librosa.filters.constant_q(22050)
+    # >>> plt.figure(figsize=(10, 6))
+    # >>> plt.subplot(2, 1, 1)
+    # >>> notes = librosa.midi_to_note(np.arange(24, 24 + len(basis)))
+    # >>> for i, (f, n) in enumerate(zip(basis, notes[:12])):
+    # ...     f_scale = librosa.util.normalize(f) / 2
+    # ...     plt.plot(i + f_scale.real)
+    # ...     plt.plot(i + f_scale.imag, linestyle=':')
+    # >>> plt.axis('tight')
+    # >>> plt.yticks(np.arange(len(notes[:12])), notes[:12])
+    # >>> plt.ylabel('CQ filters')
+    # >>> plt.title('CQ filters (one octave, time domain)')
+    # >>> plt.xlabel('Time (samples at 22050 Hz)')
+    # >>> plt.legend(['Real', 'Imaginary'], frameon=True, framealpha=0.8)
+    # >>> plt.subplot(2, 1, 2)
+    # >>> F = np.abs(np.fft.fftn(basis, axes=[-1]))
+    # >>> # Keep only the positive frequencies
+    # >>> F = F[:, :(1 + F.shape[1] // 2)]
+    # >>> librosa.display.specshow(F, x_axis='linear')
+    # >>> plt.yticks(np.arange(len(notes))[::12], notes[::12])
+    # >>> plt.ylabel('CQ filters')
+    # >>> plt.title('CQ filter magnitudes (frequency domain)')
+    # >>> plt.tight_layout()
     '''
 
     if fmin is None:
@@ -4400,7 +4402,7 @@ def constant_q(sr, fmin=None, n_bins=84, bins_per_octave=12, tuning=0.0,
 @cache(level=10)
 def constant_q_lengths(sr, fmin, n_bins=84, bins_per_octave=12,
                        tuning=0.0, window='hann', filter_scale=1):
-    r'''Return length of each filter in a constant-Q basis.
+    """Return length of each filter in a constant-Q basis.
 
     Parameters
     ----------
@@ -4438,7 +4440,7 @@ def constant_q_lengths(sr, fmin, n_bins=84, bins_per_octave=12,
     --------
     constant_q
     librosa.core.cqt
-    '''
+    """
 
     if fmin <= 0:
         raise ParameterError('fmin must be positive')
@@ -4475,7 +4477,7 @@ def constant_q_lengths(sr, fmin, n_bins=84, bins_per_octave=12,
 @cache(level=10)
 def cq_to_chroma(n_input, bins_per_octave=12, n_chroma=12,
                  fmin=None, window=None, base_c=True):
-    '''Convert a Constant-Q basis to Chroma.
+    """Convert a Constant-Q basis to Chroma.
 
 
     Parameters
@@ -4519,32 +4521,32 @@ def cq_to_chroma(n_input, bins_per_octave=12, n_chroma=12,
     --------
     Get a CQT, and wrap bins to chroma
 
-    >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    >>> CQT = librosa.cqt(y, sr=sr)
-    >>> chroma_map = librosa.filters.cq_to_chroma(CQT.shape[0])
-    >>> chromagram = chroma_map.dot(CQT)
-    >>> # Max-normalize each time step
-    >>> chromagram = librosa.util.normalize(chromagram, axis=0)
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >>> CQT = librosa.cqt(y, sr=sr)
+    # >>> chroma_map = librosa.filters.cq_to_chroma(CQT.shape[0])
+    # >>> chromagram = chroma_map.dot(CQT)
+    # >>> # Max-normalize each time step
+    # >>> chromagram = librosa.util.normalize(chromagram, axis=0)
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> plt.subplot(3, 1, 1)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(CQT,
+    # ...                                                  ref=np.max),
+    # ...                          y_axis='cqt_note')
+    # >>> plt.title('CQT Power')
+    # >>> plt.colorbar()
+    # >>> plt.subplot(3, 1, 2)
+    # >>> librosa.display.specshow(chromagram, y_axis='chroma')
+    # >>> plt.title('Chroma (wrapped CQT)')
+    # >>> plt.colorbar()
+    # >>> plt.subplot(3, 1, 3)
+    # >>> chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+    # >>> librosa.display.specshow(chroma, y_axis='chroma', x_axis='time')
+    # >>> plt.title('librosa.feature.chroma_stft')
+    # >>> plt.colorbar()
+    # >>> plt.tight_layout()
 
-    >>> import matplotlib.pyplot as plt
-    >>> plt.subplot(3, 1, 1)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(CQT,
-    ...                                                  ref=np.max),
-    ...                          y_axis='cqt_note')
-    >>> plt.title('CQT Power')
-    >>> plt.colorbar()
-    >>> plt.subplot(3, 1, 2)
-    >>> librosa.display.specshow(chromagram, y_axis='chroma')
-    >>> plt.title('Chroma (wrapped CQT)')
-    >>> plt.colorbar()
-    >>> plt.subplot(3, 1, 3)
-    >>> chroma = librosa.feature.chroma_stft(y=y, sr=sr)
-    >>> librosa.display.specshow(chroma, y_axis='chroma', x_axis='time')
-    >>> plt.title('librosa.feature.chroma_stft')
-    >>> plt.colorbar()
-    >>> plt.tight_layout()
-
-    '''
+    """
 
     # How many fractional bins are we merging?
     n_merge = float(bins_per_octave) / n_chroma
@@ -4596,7 +4598,7 @@ def cq_to_chroma(n_input, bins_per_octave=12, n_chroma=12,
 
 
 def peak_pick(x, pre_max, post_max, pre_avg, post_avg, delta, wait):
-    '''Uses a flexible heuristic to pick peaks in a signal.
+    """Uses a flexible heuristic to pick peaks in a signal.
 
     A sample n is selected as an peak if the corresponding x[n]
     fulfills the following three conditions:
@@ -4651,33 +4653,33 @@ def peak_pick(x, pre_max, post_max, pre_avg, post_avg, delta, wait):
 
     Examples
     --------
-    >>> y, sr = librosa.load(librosa.util.example_audio_file(), duration=15)
-    >>> onset_env = librosa.onset.onset_strength(y=y, sr=sr,
-    ...                                          hop_length=512,
-    ...                                          aggregate=np.median)
-    >>> peaks = librosa.util.peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)
-    >>> peaks
-    array([  4,  23,  73, 102, 142, 162, 182, 211, 261, 301, 320,
-           331, 348, 368, 382, 396, 411, 431, 446, 461, 476, 491,
-           510, 525, 536, 555, 570, 590, 609, 625, 639])
-
-    >>> import matplotlib.pyplot as plt
-    >>> times = librosa.frames_to_time(np.arange(len(onset_env)),
-    ...                                sr=sr, hop_length=512)
-    >>> plt.figure()
-    >>> ax = plt.subplot(2, 1, 2)
-    >>> D = librosa.stft(y)
-    >>> librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
-    ...                          y_axis='log', x_axis='time')
-    >>> plt.subplot(2, 1, 1, sharex=ax)
-    >>> plt.plot(times, onset_env, alpha=0.8, label='Onset strength')
-    >>> plt.vlines(times[peaks], 0,
-    ...            onset_env.max(), color='r', alpha=0.8,
-    ...            label='Selected peaks')
-    >>> plt.legend(frameon=True, framealpha=0.8)
-    >>> plt.axis('tight')
-    >>> plt.tight_layout()
-    '''
+    # >>> y, sr = librosa.load(librosa.util.example_audio_file(), duration=15)
+    # >>> onset_env = librosa.onset.onset_strength(y=y, sr=sr,
+    # ...                                          hop_length=512,
+    # ...                                          aggregate=np.median)
+    # >>> peaks = librosa.util.peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)
+    # >>> peaks
+    # array([  4,  23,  73, 102, 142, 162, 182, 211, 261, 301, 320,
+    #        331, 348, 368, 382, 396, 411, 431, 446, 461, 476, 491,
+    #        510, 525, 536, 555, 570, 590, 609, 625, 639])
+    #
+    # >>> import matplotlib.pyplot as plt
+    # >>> times = librosa.frames_to_time(np.arange(len(onset_env)),
+    # ...                                sr=sr, hop_length=512)
+    # >>> plt.figure()
+    # >>> ax = plt.subplot(2, 1, 2)
+    # >>> D = librosa.stft(y)
+    # >>> librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
+    # ...                          y_axis='log', x_axis='time')
+    # >>> plt.subplot(2, 1, 1, sharex=ax)
+    # >>> plt.plot(times, onset_env, alpha=0.8, label='Onset strength')
+    # >>> plt.vlines(times[peaks], 0,
+    # ...            onset_env.max(), color='r', alpha=0.8,
+    # ...            label='Selected peaks')
+    # >>> plt.legend(frameon=True, framealpha=0.8)
+    # >>> plt.axis('tight')
+    # >>> plt.tight_layout()
+    """
 
     if pre_max < 0:
         raise ParameterError('pre_max must be non-negative')
