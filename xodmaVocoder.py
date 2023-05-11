@@ -28,8 +28,7 @@ currentDir = os.getcwd()
 rootDir = os.path.dirname(currentDir)
 sys.path.insert(0, rootDir+'/xodma/')
 
-from xodmaAudioTools import resample
-from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
+from xodmaAudioTools import samples_to_time, time_to_samples, fix_length, resample
 from xodmaSpectralTools import amplitude_to_db, stft, istft, magphase, peak_pick
 
 
@@ -361,18 +360,14 @@ def pvRobotStretch(y, rate, vxmod):
     pitch_shift : pitch shifting
     librosa.core.phase_vocoder : spectrogram phase vocoder
 
-
     Examples
     --------
-    Compress to be twice as fast
-
+    Compress to be twice as fast:
     >> y, sr = librosa.load(librosa.util.example_audio_file())
     > y_fast = librosa.effects.time_stretch(y, 2.0)
 
-    Or half the original speed
-
+    Or half the original speed:
     >> y_slow = librosa.effects.time_stretch(y, 0.5)
-
     """
 
     if rate <= 0:

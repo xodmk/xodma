@@ -31,15 +31,17 @@ sys.path.insert(0, rootDir+'/xodma')
 
 from xodmaSpectralUtil import frames_to_samples, frames_to_time
 from xodmaMiscUtil import fix_frames, match_events, sync
-from xodmaSpectralTools import magphase, amplitude_to_db, stft, peak_pick, power_to_db
+from xodmaSpectralTools import peak_pick, power_to_db
 from xodmaSpectralFeature import melspectrogram
-from xodmaSpectralPlot import specshow
 from xodmaParameterError import ParameterError
 from cache import cache
 
+# removed from xodma -> moved to xodSpectral/xodOnset_tb.py
+# from xodmaSpectralPlot import specshow
+# from xodmaSpectralTools import magphase, amplitude_to_db, stft
 
-sys.path.insert(1, rootDir+'/xodUtil')
-import xodPlotUtil as xodplt
+#sys.path.insert(1, rootDir+'/xodUtil')
+#import xodPlotUtil as xodplt
 
 # temp python debugger - use >>>pdb.set_trace() to set break
 import pdb
@@ -59,7 +61,7 @@ __all__ = ['detectOnset',
 # // *---------------------------------------------------------------------* //
 
 def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
-                backtrack=False, plots=1, **kwargs):
+                backtrack=False, **kwargs):
     
     """Basic onset detector.  Locate note onset events by picking peaks in an
     onset strength envelope.
@@ -195,11 +197,11 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
     # peak_onsets_ch2 = np.array(onset_env_ch2)[peaks_ch2]
 
     # These parameter settings found by large-scale search
-    # kwargs.setdefault('pre_max', 0.03*sr//hop_length)       # 30ms
-    # kwargs.setdefault('post_max', 0.00*sr//hop_length + 1)  # 0ms
-    # kwargs.setdefault('pre_avg', 0.10*sr//hop_length)       # 100ms
-    # kwargs.setdefault('post_avg', 0.10*sr//hop_length + 1)  # 100ms
-    # kwargs.setdefault('wait', 0.03*sr//hop_length)          # 30ms
+    # kwargs.setdefault('pre_max', 0.03 * sr // hop_length)       # 30ms
+    # kwargs.setdefault('post_max', 0.00 * sr // hop_length + 1)  # 0ms
+    # kwargs.setdefault('pre_avg', 0.10 * sr // hop_length)       # 100ms
+    # kwargs.setdefault('post_avg', 0.10 * sr // hop_length + 1)  # 100ms
+    # kwargs.setdefault('wait', 0.03 * sr // hop_length)          # 30ms
     # kwargs.setdefault('delta', 0.07)
 
     kwargs.setdefault('pre_max', 0.03 * sr // hop_length)       # 30ms
@@ -224,53 +226,53 @@ def detectOnset(y, peakThresh, peakWait, hop_length=512, sr=48000,
 
     # peak_regions = get_peak_regions(peaks, len(onset_env))
 
-    # // *--- Plot - source signal ---*
-
-    if plots > 1:
-    
-        fnum = 3
-        pltTitle = 'Input Signals: aSrc_ch1'
-        pltXlabel = 'sinArray time-domain wav'
-        pltYlabel = 'Magnitude'
-        
-        # define a linear space from 0 to 1/2 Fs for x-axis:
-        xaxis = np.linspace(0, len(y), len(y))
-        
-        xodplt.xodPlot1D(fnum, y, xaxis, pltTitle, pltXlabel, pltYlabel)
-    
-    # // *-----------------------------------------------------------------* //
-    # // *--- Plot Peak-Picking results vs. Spectrogram ---*
-    
-    if plots > 0:
-        
-        # // *-----------------------------------------------------------------* //
-        # // *--- Perform the STFT ---*
-        
-        NFFT = 2048
-        ySTFT = stft(y, NFFT)
-        assert (ySTFT.shape[1] == len(onset_env)), "Number of STFT frames != len onset_env"
-
-        # times_ch1 = frames_to_time(np.arange(len(onset_env_ch1)), fs, hop_length=512)
-        # currently uses fixed hop_length
-        times = frames_to_time(np.arange(len(onset_env)), sr, NFFT/4)
-        plt.figure(facecolor='silver', edgecolor='k', figsize=(12, 8))
-        ax = plt.subplot(2, 1, 1)
-        specshow(amplitude_to_db(magphase(ySTFT)[0], ref=np.max), y_axis='log', x_axis='time', cmap=plt.cm.viridis)
-        plt.title('CH1: Spectrogram (STFT)')
-        
-        plt.subplot(2, 1, 2, sharex=ax)
-        plt.plot(times, onset_env, alpha=0.66, label='Onset strength')
-        plt.vlines(times[onsets], 0, onset_env.max(), color='r', alpha=0.8,
-                                                       label='Selected peaks')
-        plt.legend(frameon=True, framealpha=0.66)
-        plt.axis('tight')
-        plt.tight_layout()
-        
-        plt.xlabel('time')
-        plt.ylabel('Amplitude')
-        plt.title('Onset Strength detection & Peak Selection')
-
-    plt.show()
+    # # // *--- Plot - source signal ---*
+    #
+    # if plots > 1:
+    #
+    #     fnum = 3
+    #     pltTitle = 'Input Signals: aSrc_ch1'
+    #     pltXlabel = 'sinArray time-domain wav'
+    #     pltYlabel = 'Magnitude'
+    #
+    #     # define a linear space from 0 to 1/2 Fs for x-axis:
+    #     xaxis = np.linspace(0, len(y), len(y))
+    #
+    #     xodplt.xodPlot1D(fnum, y, xaxis, pltTitle, pltXlabel, pltYlabel)
+    #
+    # # // *-----------------------------------------------------------------* //
+    # # // *--- Plot Peak-Picking results vs. Spectrogram ---*
+    #
+    # if plots > 0:
+    #
+    #     # // *-----------------------------------------------------------------* //
+    #     # // *--- Perform the STFT ---*
+    #
+    #     NFFT = 2048
+    #     ySTFT = stft(y, NFFT)
+    #     assert (ySTFT.shape[1] == len(onset_env)), "Number of STFT frames != len onset_env"
+    #
+    #     # times_ch1 = frames_to_time(np.arange(len(onset_env_ch1)), fs, hop_length=512)
+    #     # currently uses fixed hop_length
+    #     times = frames_to_time(np.arange(len(onset_env)), sr, NFFT/4)
+    #     plt.figure(facecolor='silver', edgecolor='k', figsize=(12, 8))
+    #     ax = plt.subplot(2, 1, 1)
+    #     specshow(amplitude_to_db(magphase(ySTFT)[0], ref=np.max), y_axis='log', x_axis='time', cmap=plt.cm.viridis)
+    #     plt.title('CH1: Spectrogram (STFT)')
+    #
+    #     plt.subplot(2, 1, 2, sharex=ax)
+    #     plt.plot(times, onset_env, alpha=0.66, label='Onset strength')
+    #     plt.vlines(times[onsets], 0, onset_env.max(), color='r', alpha=0.8,
+    #                                                    label='Selected peaks')
+    #     plt.legend(frameon=True, framealpha=0.66)
+    #     plt.axis('tight')
+    #     plt.tight_layout()
+    #
+    #     plt.xlabel('time')
+    #     plt.ylabel('Amplitude')
+    #     plt.title('Onset Strength detection & Peak Selection')
+    #
+    # plt.show()
 
     return onsets_samples, onsets_time
 
