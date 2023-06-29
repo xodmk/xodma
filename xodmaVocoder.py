@@ -28,7 +28,8 @@ currentDir = os.getcwd()
 rootDir = os.path.dirname(currentDir)
 sys.path.insert(0, rootDir+'/xodma/')
 
-from xodmaAudioTools import samples_to_time, time_to_samples, fix_length, resample
+from xodmaAudioTools import resample
+from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
 from xodmaSpectralTools import amplitude_to_db, stft, istft, magphase, peak_pick
 
 
@@ -92,7 +93,7 @@ def pv1(D, rate, hop_length=None):
     if hop_length is None:
         hop_length = int(n_fft // 4)
 
-    time_steps = np.arange(0, D.shape[1], rate, dtype=np.float)
+    time_steps = np.arange(0, D.shape[1], rate, dtype=float)
 
     # Create an empty output array
     d_stretch = np.zeros((D.shape[0], len(time_steps)), D.dtype, order='F')
@@ -232,7 +233,7 @@ def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
     ...                                          bins_per_octave=24)
     """
 
-    if bins_per_octave < 1 or not np.issubdtype(type(bins_per_octave), np.int):
+    if bins_per_octave < 1 or not np.issubdtype(type(bins_per_octave), int):
         sys.exit('ERROR: func pitch_shift - bins_per_octave must be a positive integer.')
 
     rate = 2.0 ** (-float(n_steps) / bins_per_octave)
@@ -296,7 +297,7 @@ def pvRobotSmith(D, rate, voxmod, hop_length=None):
     if hop_length is None:
         hop_length = int(n_fft // 4)
 
-    time_steps = np.arange(0, D.shape[1], rate, dtype=np.float)
+    time_steps = np.arange(0, D.shape[1], rate, dtype=float)
 
     # Create an empty output array
     d_stretch = np.zeros((D.shape[0], len(time_steps)), D.dtype, order='F')
@@ -360,14 +361,18 @@ def pvRobotStretch(y, rate, vxmod):
     pitch_shift : pitch shifting
     librosa.core.phase_vocoder : spectrogram phase vocoder
 
+
     Examples
     --------
-    Compress to be twice as fast:
+    Compress to be twice as fast
+
     >> y, sr = librosa.load(librosa.util.example_audio_file())
     > y_fast = librosa.effects.time_stretch(y, 2.0)
 
-    Or half the original speed:
+    Or half the original speed
+
     >> y_slow = librosa.effects.time_stretch(y, 0.5)
+
     """
 
     if rate <= 0:
@@ -410,7 +415,7 @@ def pvRobotStretch(y, rate, vxmod):
 #
 # for(posin=posout=0; posin < input_size; posin+=hopsize){
 #      mod = posin%fftsize;
-#	   // window & rotate a signal frame
+#	   # window & rotate a signal frame
 #      for(i=0; i < fftsize; i++)
 #          if(posin+i < input_size)
 #            sigframe[(i+mod)%fftsize]
