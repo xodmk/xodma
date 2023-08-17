@@ -92,43 +92,27 @@ __all__ = [
 
 @cache(level=20)
 def valid_audio(y: np.ndarray) -> bool:
-    """Determine whether a variable contains valid audio data.
+    """ Determine whether a variable contains valid audio data.
     The following conditions must be satisfied:
     - ``type(y)`` is ``np.ndarray``
     - ``y.dtype`` is floating-point
     - ``y.ndim != 0`` (must have at least one dimension)
     - ``np.isfinite(y).all()`` samples must be all finite values
-    If ``mono`` is specified, then we additionally require
-    - ``y.ndim == 1``
-    Parameters
-    ----------
-    y : np.ndarray
-        The input data to validate
-    Returns
-    -------
-    valid : bool
-        True if all tests pass
-    Raises
-    ------
-    ParameterError
+
+    __Parameters__
+    y : np.ndarray - The input data to validate
+
+    __Returns__
+    bool -> True if all tests pass
+
+    __Raises ParameterError__
         In any of the conditions specified above fails
-    Notes
-    -----
-    This function caches at level 20.
-    Examples
-    --------
-    # >>> # By default, valid_audio allows only mono signals
+
+    __Examples__
     # >>> filepath = librosa.ex('trumpet', hq=True)
-    # >>> y_mono, sr = librosa.load(filepath, mono=True)
-    # >>> y_stereo, _ = librosa.load(filepath, mono=False)
-    # >>> librosa.util.valid_audio(y_mono), librosa.util.valid_audio(y_stereo)
-    # True, False
-    # >>> # To allow stereo signals, set mono=False
-    # >>> librosa.util.valid_audio(y_stereo, mono=False)
+    # >>> y_stereo, sr = librosa.load(filepath, mono=False)
+    # >>> valid_audio(y_stereo)
     # True
-    See Also
-    --------
-    numpy.float32
     """
 
     if not isinstance(y, np.ndarray):

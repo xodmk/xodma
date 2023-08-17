@@ -31,7 +31,7 @@ sys.path.insert(0, rootDir+'/xodma/')
 from xodmaAudioTools import resample
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
 from xodmaSpectralTools import amplitude_to_db, stft, istft, magphase, peak_pick
-
+from xodmaMiscUtil import valid_audio
 
 # temp python debugger - use >>>pdb.set_trace() to set break
 #import pdb
@@ -133,40 +133,23 @@ def pv1(D, rate, hop_length=None):
     return d_stretch
 
 
-def pvTimeStretch(y, rate):
+def pvTimeStretch(y, rate, n_fft):
     """Time-stretch an audio series by a fixed rate.
 
-    Parameters
-    ----------
-    y : np.ndarray [shape=(n,)]
-        audio time series
+    __Parameters:
+    :param y: np.ndarray [shape=(n,)] - audio time series
+    :param rate: float [scalar > 0] => Time-Stretch -> rate > 1 ; Time-Compress -> rate < 1
+    :param n_fft: FFT Length
 
-    rate : float > 0 [scalar]
-        Stretch factor.  If `rate > 1`, then the signal is sped up.
-
-        If `rate < 1`, then the signal is slowed down.
-
-    Returns
-    -------
+    __Returns:
     y_stretch : np.ndarray [shape=(rate * n,)]
         audio time series stretched by the specified rate
 
-    See Also
-    --------
-    pitch_shift : pitch shifting
-    librosa.core.phase_vocoder : spectrogram phase vocoder
-
-
-    Examples
-    --------
-    Compress to be twice as fast
-
-    >> y, sr = librosa.load(librosa.util.example_audio_file())
-    > y_fast = librosa.effects.time_stretch(y, 2.0)
-
-    Or half the original speed
-
-    >> y_slow = librosa.effects.time_stretch(y, 0.5)
+    __Examples:
+    # >>> # Time-Compress: Play at 1/2x speed
+    # >>> rate = timeExpand = 0.5
+    # >>> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
+    # >>> yResult = pvTimeStretch(y, rate, n_fft)
 
     """
 
@@ -175,7 +158,7 @@ def pvTimeStretch(y, rate):
         return
 
     # Construct the stft
-    ySTFT = stft(y)
+    ySTFT = stft(y, n_fft=n_fft)
 
     # Stretch by phase vocoding
     stftStretch = pv1(ySTFT, rate)
@@ -186,8 +169,8 @@ def pvTimeStretch(y, rate):
     return yStretch
 
 
-def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
-    """Pitch-shift the waveform by `n_steps` half-steps.
+def pvPitchShift(y, sr, n_fft, n_steps, bins_per_octave=12):
+    """ Pitch-shift the waveform by `n_steps` half-steps.
 
     Parameters
     ----------
@@ -196,6 +179,8 @@ def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
 
     sr : number > 0 [scalar]
         audio sampling rate of `y`
+
+    n_fft : FFT Length
 
     n_steps : float [scalar]
         how many (fractional) half-steps to shift `y`
@@ -239,7 +224,7 @@ def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
     rate = 2.0 ** (-float(n_steps) / bins_per_octave)
 
     # Stretch in time, then resample
-    y_shift = resample(pvTimeStretch(y, rate), float(sr) / rate, sr)
+    y_shift = resample(pvTimeStretch(y, rate, n_fft), float(sr) / rate, sr)
 
     # Crop to the same dimension as the input
     return fix_length(y_shift, len(y))
@@ -247,72 +232,51 @@ def pvPitchShift(y, sr, n_steps, bins_per_octave=12):
 
 # // *---------------------------------------------------------------------* //
 
-def pvRobotSmith(D, rate, voxmod, hop_length=None):
-    """Phase vocoder.  Given an STFT matrix D, speed up by a factor of `rate`
+def pvRobotSmith(ySTFT, rate, voxmod, hop_length=None):
+    """ XODMK Phase vocoder.  Given an STFT matrix ySTFT, speed up by a factor of `rate`
 
-    Based on the implementation provided by [1]_.
-
-    .. [1] Ellis, D. P. W. "A phase vocoder in Matlab."
-        Columbia University, 2002.
-        http://www.ee.columbia.edu/~dpwe/resources/matlab/pvoc/
-
-    Examples
-    --------
-    # >>> # Play at double speed
-    # >>> y, sr   = librosa.load(librosa.util.example_audio_file())
-    # >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
-    # >>> D_fast  = librosa.phase_vocoder(D, 2.0, hop_length=512)
-    # >>> y_fast  = librosa.istft(D_fast, hop_length=512)
-    #
-    # >>> # Or play at 1/3 speed
-    # >>> y, sr   = librosa.load(librosa.util.example_audio_file())
-    # >>> D       = librosa.stft(y, n_fft=2048, hop_length=512)
-    # >>> D_slow  = librosa.phase_vocoder(D, 1./3, hop_length=512)
-    # >>> y_slow  = librosa.istft(D_slow, hop_length=512)
-
-    Parameters
-    ----------
-    D : np.ndarray [shape=(d, t), dtype=complex]
-        STFT matrix
-
-    rate :  float > 0 [scalar]
-        Speed-up factor: `rate > 1` is faster, `rate < 1` is slower.
-
-    voxmod : float 0.001 < x < ?
-        vocoder glitch EFFX - robovocalize
-
-    hop_length : int > 0 [scalar] or None
+    __parameters__
+    :param ySTFT       : np.ndarray [shape=(d, t), dtype=complex] => STFT output matrix
+    :param rate        : float [scalar > 0] => Time-Stretch -> rate > 1 ; Time-Compress -> rate < 1
+    :param voxmod      : float 0.001 < x < ? => vox modulation EFFX
+    :param hop_length  : int > 0 [scalar] or None
         The number of samples between successive columns of `D`.
-
         If None, defaults to `n_fft/4 = (D.shape[0]-1)/2`
 
-    Returns
-    -------
-    D_stretched  : np.ndarray [shape=(d, t / rate), dtype=complex]
-        time-stretched STFT
+    __Returns__
+    yVocode     : np.ndarray [shape=(d, t / rate), dtype=complex] => phase vocoded STFT
+
+    __Examples__
+    # >>> # Time-Compress: Play at 1/2x speed
+    # >>> rate = timeExpand = 0.5
+    # >>> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
+    # >>> ySTFT = stft(y, n_fft)
+    # >>> yVocodeOut = pvRobotSmith(ySTFT, rate, vxmod)
+    # >>> yNewResult = istft(yVocodeOut, dtype=y.dtype)
+
     """
 
-    n_fft = 2 * (D.shape[0] - 1)
+    n_fft = 2 * (ySTFT.shape[0] - 1)
 
     if hop_length is None:
         hop_length = int(n_fft // 4)
 
-    time_steps = np.arange(0, D.shape[1], rate, dtype=float)
+    time_steps = np.arange(0, ySTFT.shape[1], rate, dtype=float)
 
     # Create an empty output array
-    d_stretch = np.zeros((D.shape[0], len(time_steps)), D.dtype, order='F')
+    yVocode = np.zeros((ySTFT.shape[0], len(time_steps)), ySTFT.dtype, order='F')
 
     # Expected phase advance in each bin
-    phi_advance = np.linspace(0, np.pi * hop_length, D.shape[0])
+    phi_advance = np.linspace(0, np.pi * hop_length, ySTFT.shape[0])
 
     # Phase accumulator; initialize to the first sample
-    phase_acc = np.angle(D[:, 0])
+    phase_acc = np.angle(ySTFT[:, 0])
 
     # Pad 0 columns to simplify boundary logic
-    D = np.pad(D, [(0, 0), (0, 2)], mode='constant')
+    ySTFT = np.pad(ySTFT, [(0, 0), (0, 2)], mode='constant')
 
     for (t, step) in enumerate(time_steps):
-        columns = D[:, int(step):int(step + 2)]
+        columns = ySTFT[:, int(step):int(step + 2)]
 
         # Weighting for linear magnitude interpolation
         alpha = np.mod(step, 1.0)
@@ -320,7 +284,138 @@ def pvRobotSmith(D, rate, voxmod, hop_length=None):
                + alpha * np.abs(columns[:, 1]))
 
         # Store to output array
-        d_stretch[:, t] = mag * np.exp(1.j * phase_acc * voxmod)
+        # yVocode[:, t] = mag * np.exp(1.j * phase_acc * voxmod)
+        yVocode[:, t] = mag * np.exp(1.j * phase_acc)
+
+        # Compute phase advance
+        dphase = (np.angle(columns[:, 1]) - np.angle(columns[:, 0]) - phi_advance)
+
+        # Wrap to -pi:pi range
+        dphase = dphase - 2.0 * np.pi * np.round(dphase / (2.0 * np.pi))
+
+        # Accumulate phase
+        # phase_acc += phi_advance + dphase
+        phase_acc += phi_advance
+
+    return yVocode
+
+
+def pvRobotStretch(y, rate, vxmod, n_fft):
+    """ Phase-Vocoder RobotSmith Time-Stretch an audio series by a fixed rate
+
+    __parameters__
+    y       : np.ndarray [shape=(n,)] => audio time series
+    rate    : float [scalar > 0] => Time-Stretch -> rate > 1 ; Time-Compress -> rate < 1
+    vxmod   : vox modulation EFFX
+    n_fft       : FFT Length
+
+    __return__
+    yStretch : np.ndarray [shape=(rate * n,)] => modified audio time series
+
+
+    __examples__
+
+    >> Process Stereo .wav file...
+    >> from xodmaAudioTools import load_wav, write_wav
+    >> audioSrc = audioSrcDir + '/' + srcNm
+    >> [aSrc, aNumChannels, afs, aLength, aSamples] = load_wav(audioSrc, wavLength, True)
+    >> aSrc_ch1 = aSrc[:, 0]
+    >> aSrc_ch2 = aSrc[:, 1]
+
+    ** vox modulation exp...
+    >> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0] :
+    >> vxtilt = -0.5    # Vox Mod Stereo
+    >> vxmodL = vxmod - (vxtilt * vxmod)
+    >> vxmodR = vxmod + (vxtilt * vxmod)
+
+    ** Time-Compress to be twice as fast:  rate = timeCompress = 2.0
+    >> yRS_Compress_ch1 = pvRobotStretch(aSrc_ch1, timeCompress, vxmodL)
+    >> yRS_Compress_ch2 = pvRobotStretch(aSrc_ch2, timeCompress, vxmodR)
+    >> yRS_Compress = np.transpose(np.column_stack((yRS_Compress_ch1, yRS_Compress_ch2)))
+
+    ** Time-Expand to half the original speed: rate = timeExpand = 0.5
+    >> yRS_Expand_ch1 = pvRobotStretch(aSrc_ch1, timeExpand, vxmodL)
+    >> yRS_Expand_ch2 = pvRobotStretch(aSrc_ch2, timeExpand, vxmodR)
+    >> yRS_Expand = np.transpose(np.column_stack((yRS_Expand_ch1, yRS_Expand_ch2)))
+
+    """
+
+    # Check if y is valid nd.array audio time series
+    if not valid_audio(y):
+        print('\ny must be a nd.array audio time series')
+        return
+
+    if rate <= 0:
+        print('\nrate must be a positive number')
+        return
+
+    ySTFT = stft(y, n_fft=n_fft)
+    stftStretch = pvRobotSmith(ySTFT, rate, vxmod)
+    yStretch = istft(stftStretch, dtype=y.dtype)
+
+    return yStretch
+
+
+# // *---------------------------------------------------------------------* //
+
+def pvPeakHarmonics(ySTFT, rate, numPeaks, hop_length=None):
+    """ XODMK Phase vocoder.  Given an STFT matrix ySTFT, speed up by a factor of `rate`
+
+    __parameters__
+    ySTFT       : np.ndarray [shape=(d, t), dtype=complex] => STFT output matrix
+    rate        : float [scalar > 0] => Time-Stretch -> rate > 1 ; Time-Compress -> rate < 1
+    numPeaks    : int 2 < x < ? => Number of Peaks to Detect each frame
+    hop_length  : int > 0 [scalar] or None
+        The number of samples between successive columns of `D`.
+        If None, defaults to `n_fft/4 = (D.shape[0]-1)/2`
+
+        :param hop_length:
+        :param numPeaks:
+        :param rate:
+        :param ySTFT:
+
+    __Returns__
+    yVocode     : np.ndarray [shape=(d, t / rate), dtype=complex] => phase vocoded STFT
+
+    __Examples__
+    # >>> # Time-Compress: Play at 1/2x speed
+    # >>> rate = timeExpand = 0.5
+    # >>> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
+    # >>> ySTFT = stft(y)
+    # >>> yVocodeOut = pvRobotSmith(ySTFT, rate, vxmod)
+    # >>> yNewResult = istft(yVocodeOut, dtype=y.dtype)
+
+    """
+
+    n_fft = 2 * (ySTFT.shape[0] - 1)
+
+    if hop_length is None:
+        hop_length = int(n_fft // 4)
+
+    time_steps = np.arange(0, ySTFT.shape[1], rate, dtype=float)
+
+    # Create an empty output array
+    yVocode = np.zeros((ySTFT.shape[0], len(time_steps)), ySTFT.dtype, order='F')
+
+    # Expected phase advance in each bin
+    phi_advance = np.linspace(0, np.pi * hop_length, ySTFT.shape[0])
+
+    # Phase accumulator; initialize to the first sample
+    phase_acc = np.angle(ySTFT[:, 0])
+
+    # Pad 0 columns to simplify boundary logic
+    ySTFT = np.pad(ySTFT, [(0, 0), (0, 2)], mode='constant')
+
+    for (t, step) in enumerate(time_steps):
+        columns = ySTFT[:, int(step):int(step + 2)]
+
+        # Weighting for linear magnitude interpolation
+        alpha = np.mod(step, 1.0)
+        mag = ((1.0 - alpha) * np.abs(columns[:, 0])
+               + alpha * np.abs(columns[:, 1]))
+
+        # Store to output array
+        yVocode[:, t] = mag * np.exp(1.j * phase_acc * voxmod)
 
         # Compute phase advance
         dphase = (np.angle(columns[:, 1])
@@ -333,62 +428,7 @@ def pvRobotSmith(D, rate, voxmod, hop_length=None):
         # Accumulate phase
         phase_acc += phi_advance + dphase
 
-    return d_stretch
-
-
-def pvRobotStretch(y, rate, vxmod):
-    """Time-stretch an audio series by a fixed rate.
-
-    Parameters
-    ----------
-    y : np.ndarray [shape=(n,)]
-        audio time series
-
-    rate : float > 0 [scalar]
-        Stretch factor.  If `rate > 1`, then the signal is sped up.
-
-        If `rate < 1`, then the signal is slowed down.
-
-    vxmod : vox modulation
-
-    Returns
-    -------
-    y_stretch : np.ndarray [shape=(rate * n,)]
-        audio time series stretched by the specified rate
-
-    See Also
-    --------
-    pitch_shift : pitch shifting
-    librosa.core.phase_vocoder : spectrogram phase vocoder
-
-
-    Examples
-    --------
-    Compress to be twice as fast
-
-    >> y, sr = librosa.load(librosa.util.example_audio_file())
-    > y_fast = librosa.effects.time_stretch(y, 2.0)
-
-    Or half the original speed
-
-    >> y_slow = librosa.effects.time_stretch(y, 0.5)
-
-    """
-
-    if rate <= 0:
-        print('\nrate must be a positive number')
-        return
-
-    # Construct the stft
-    ySTFT = stft(y)
-
-    # Stretch by phase vocoding
-    stftStretch = pvRobotSmith(ySTFT, rate, vxmod)
-
-    # Invert the stft
-    yStretch = istft(stftStretch, dtype=y.dtype)
-
-    return yStretch
+    return yVocode
 
 
 # // *---------------------------------------------------------------------* //
