@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
-# header begin-----------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 #
@@ -10,10 +9,8 @@
 # Spectral Tools Plotting functions - Spectragram etc..
 #
 #
-#
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
-# header end-------------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
@@ -89,18 +86,17 @@ else:
 
 currentDir = os.getcwd()
 rootDir = os.path.dirname(currentDir)
-sys.path.insert(0, rootDir+'/xodma/')
+sys.path.insert(0, rootDir+'/xodma')
 
+
+from xodmaAudioTools import peak_pick
 from xodmaSpectralUtil import fft_frequencies, hz_to_note, note_to_hz, frames_to_samples, frames_to_time
 from xodmaMiscUtil import fix_frames, match_events, sync
-from xodmaSpectralTools import magphase, amplitude_to_db, stft, peak_pick, power_to_db
+from xodmaSpectralTools import magphase, amplitude_to_db, stft, power_to_db
 from xodmaSpectralFeature import melspectrogram
 from intervals import interval_frequencies
 from xodmaParameterError import ParameterError
 from cache import cache
-
-
-
 
 
 __all__ = [
@@ -215,7 +211,7 @@ class TimeFormatter(mplticker.Formatter):
 
 
 class NoteFormatter(mplticker.Formatter):
-    """Ticker formatter for Notes
+    """ Ticker formatter for Notes
     Parameters
     ----------
     octave : bool

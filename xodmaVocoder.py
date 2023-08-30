@@ -23,18 +23,23 @@ import sys
 import numpy as np
 # import scipy as sp
 
+# ** TEMP DEBUG
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+# ** END TEMP
 
 currentDir = os.getcwd()
 rootDir = os.path.dirname(currentDir)
 sys.path.insert(0, rootDir+'/xodma/')
 
-from xodmaAudioTools import resample
+from xodmaAudioTools import resample, peak_pick, xodmaPeaks
 from xodmaAudioTools import samples_to_time, time_to_samples, fix_length
-from xodmaSpectralTools import amplitude_to_db, stft, istft, magphase, peak_pick
+from xodmaSpectralTools import amplitude_to_db, stft, istft, magphase
 from xodmaMiscUtil import valid_audio
 
-# temp python debugger - use >>>pdb.set_trace() to set break
-#import pdb
+# temp python debugger - use >>> pdb.set_trace() to set break
+import pdb
 
 
 # /////////////////////////////////////////////////////////////////////////////
@@ -47,7 +52,7 @@ from xodmaMiscUtil import valid_audio
 # // *---------------------------------------------------------------------* //
     
 def pv1(D, rate, hop_length=None):
-    """Phase vocoder.  Given an STFT matrix D, speed up by a factor of `rate`
+    """ Phase vocoder.  Given an STFT matrix D, speed up by a factor of `rate`
 
     Based on the implementation provided by [1]_.
 
@@ -146,11 +151,10 @@ def pvTimeStretch(y, rate, n_fft):
         audio time series stretched by the specified rate
 
     __Examples:
-    # >>> # Time-Compress: Play at 1/2x speed
-    # >>> rate = timeExpand = 0.5
-    # >>> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
-    # >>> yResult = pvTimeStretch(y, rate, n_fft)
-
+    # >> # Time-Compress: Play at 1/2x speed
+    # >> rate = timeExpand = 0.5
+    # >> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
+    # >> yResult = pvTimeStretch(y, rate, n_fft)
     """
 
     if rate <= 0:
@@ -188,33 +192,24 @@ def pvPitchShift(y, sr, n_fft, n_steps, bins_per_octave=12):
     bins_per_octave : float > 0 [scalar]
         how many steps per octave
 
-
-    Returns
-    -------
+    __Returns__
     y_shift : np.ndarray [shape=(n,)]
         The pitch-shifted audio time-series
 
-
-    See Also
-    --------
+    __See Also__
     time_stretch : time stretching
     librosa.core.phase_vocoder : spectrogram phase vocoder
 
-
-    Examples
-    --------
+    __Examples__
     Shift up by a major third (four half-steps)
-
-    # >>> y, sr = librosa.load(librosa.util.example_audio_file())
-    # >>> y_third = librosa.effects.pitch_shift(y, sr, n_steps=4)
+    # >> y, sr = librosa.load(librosa.util.example_audio_file())
+    # >> y_third = librosa.effects.pitch_shift(y, sr, n_steps=4)
 
     Shift down by a tritone (six half-steps)
-
-    # >>> y_tritone = librosa.effects.pitch_shift(y, sr, n_steps=-6)
+    # >> y_tritone = librosa.effects.pitch_shift(y, sr, n_steps=-6)
 
     Shift up by 3 quarter-tones
-
-    # >>> y_three_qt = librosa.effects.pitch_shift(y, sr, n_steps=3,
+    # >> y_three_qt = librosa.effects.pitch_shift(y, sr, n_steps=3,
     ...                                          bins_per_octave=24)
     """
 
@@ -247,13 +242,12 @@ def pvRobotSmith(ySTFT, rate, voxmod, hop_length=None):
     yVocode     : np.ndarray [shape=(d, t / rate), dtype=complex] => phase vocoded STFT
 
     __Examples__
-    # >>> # Time-Compress: Play at 1/2x speed
-    # >>> rate = timeExpand = 0.5
-    # >>> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
-    # >>> ySTFT = stft(y, n_fft)
-    # >>> yVocodeOut = pvRobotSmith(ySTFT, rate, vxmod)
-    # >>> yNewResult = istft(yVocodeOut, dtype=y.dtype)
-
+    # >> # Time-Compress: Play at 1/2x speed
+    # >> rate = timeExpand = 0.5
+    # >> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
+    # >> ySTFT = stft(y, n_fft)
+    # >> yVocodeOut = pvRobotSmith(ySTFT, rate, vxmod)
+    # >> yNewResult = istft(yVocodeOut, dtype=y.dtype)
     """
 
     n_fft = 2 * (ySTFT.shape[0] - 1)
@@ -358,33 +352,29 @@ def pvRobotStretch(y, rate, vxmod, n_fft):
 
 # // *---------------------------------------------------------------------* //
 
-def pvPeakHarmonics(ySTFT, rate, numPeaks, hop_length=None):
+def pvPeakHarmonics(ySTFT, sr, rate, peakThresh, peakWait, hop_length=None):
     """ XODMK Phase vocoder.  Given an STFT matrix ySTFT, speed up by a factor of `rate`
 
     __parameters__
-    ySTFT       : np.ndarray [shape=(d, t), dtype=complex] => STFT output matrix
-    rate        : float [scalar > 0] => Time-Stretch -> rate > 1 ; Time-Compress -> rate < 1
-    numPeaks    : int 2 < x < ? => Number of Peaks to Detect each frame
-    hop_length  : int > 0 [scalar] or None
+    :param ySTFT        : np.ndarray [shape=(d, t), dtype=complex] => STFT output matrix
+    :param sr           : Sample Rate
+    :param rate         : float [scalar > 0] => Time-Stretch -> rate > 1 ; Time-Compress -> rate < 1
+    :param peakThresh   : threshold offset above windowed-mean to qualify a peak
+    :param peakWait     : number of samples to wait after picking a peak
+    :param hop_length   : int > 0 [scalar] or None
         The number of samples between successive columns of `D`.
         If None, defaults to `n_fft/4 = (D.shape[0]-1)/2`
-
-        :param hop_length:
-        :param numPeaks:
-        :param rate:
-        :param ySTFT:
 
     __Returns__
     yVocode     : np.ndarray [shape=(d, t / rate), dtype=complex] => phase vocoded STFT
 
     __Examples__
-    # >>> # Time-Compress: Play at 1/2x speed
-    # >>> rate = timeExpand = 0.5
-    # >>> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
-    # >>> ySTFT = stft(y)
-    # >>> yVocodeOut = pvRobotSmith(ySTFT, rate, vxmod)
-    # >>> yNewResult = istft(yVocodeOut, dtype=y.dtype)
-
+    # >> # Time-Compress: Play at 1/2x speed
+    # >> rate = timeExpand = 0.5
+    # >> vxmod = 0.05     # Vox Modulation Depth - range[0.01, 1.0]
+    # >> ySTFT = stft(y)
+    # >> yVocodeOut = pvRobotSmith(ySTFT, rate, vxmod)
+    # >> yNewResult = istft(yVocodeOut, dtype=y.dtype)
     """
 
     n_fft = 2 * (ySTFT.shape[0] - 1)
@@ -411,11 +401,35 @@ def pvPeakHarmonics(ySTFT, rate, numPeaks, hop_length=None):
 
         # Weighting for linear magnitude interpolation
         alpha = np.mod(step, 1.0)
-        mag = ((1.0 - alpha) * np.abs(columns[:, 0])
-               + alpha * np.abs(columns[:, 1]))
+        mag = ((1.0 - alpha) * np.abs(columns[:, 0]) + alpha * np.abs(columns[:, 1]))
+
+        # Find Peaks for each STFT Mag frame
+        magPeaks = xodmaPeaks(mag, sr, hop_length, peakThresh, peakWait)
+
+        # // *---------------------------------------------------------------------* //
+        # TEMP DEBUG...
+        print("magPeaks_res = " + str(magPeaks))
+
+        # ?? checkit..
+        N = len(mag)
+        T = N / float(sr)
+        t = np.linspace(0, T, len(mag))
+
+        plt.figure(figsize=(14, 5))
+        plt.plot(t, mag)
+        plt.grid(False)
+        plt.vlines(t[magPeaks], 0, mag.max(), color='r', alpha=0.7)
+        plt.title('xodmaPeaks_res')
+        plt.xlabel('Time (sec)')
+        plt.xlim(0, T)
+        plt.ylim(0)
+
+        plt.show()
+        # // *---------------------------------------------------------------------* //
+        pdb.set_trace()
 
         # Store to output array
-        yVocode[:, t] = mag * np.exp(1.j * phase_acc * voxmod)
+        yVocode[:, t] = mag * np.exp(1.j * phase_acc)
 
         # Compute phase advance
         dphase = (np.angle(columns[:, 1])

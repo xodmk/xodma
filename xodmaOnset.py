@@ -29,9 +29,10 @@ currentDir = os.getcwd()
 rootDir = os.path.dirname(currentDir)
 sys.path.insert(0, rootDir+'/xodma')
 
+from xodmaAudioTools import peak_pick
 from xodmaSpectralUtil import frames_to_samples, frames_to_time
 from xodmaMiscUtil import fix_frames, match_events, sync
-from xodmaSpectralTools import peak_pick, power_to_db
+from xodmaSpectralTools import power_to_db
 from xodmaSpectralFeature import melspectrogram
 from xodmaParameterError import ParameterError
 from cache import cache

@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
-# header begin-----------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 #
@@ -20,7 +19,6 @@
 #
 # *****************************************************************************
 # /////////////////////////////////////////////////////////////////////////////
-# header end-------------------------------------------------------------------
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # *****************************************************************************
 
@@ -50,13 +48,13 @@ from cache import cache
 from xodmaSpectralUtil import MAX_MEM_BLOCK, note_to_hz, hz_to_midi, hz_to_octs
 from xodmaSpectralUtil import fft_frequencies, mel_frequencies, A_weighting
 from xodmaSpectralUtil import frame, get_window, window_bandwidth, frames_to_time
-from xodmaMiscUtil import tiny, fix_length, valid_int, normalize, pad_center, expand_to
+from xodmaMiscUtil import tiny, fix_length, normalize, pad_center, expand_to
 from xodmaMiscUtil import phasor, is_positive_int, dtype_r2c, dtype_c2r, cyclic_gradient
 from xodmaAudioTools import valid_audio, resample
 from xodmaParameterError import ParameterError
 from _typing import _WindowSpec, _PadMode, _PadModeSTFT
 
-# temp python debugger - use >>>pdb.set_trace() to set break
+# temp python debugger - use >>> pdb.set_trace() to set break
 # import pdb
 
 # // *---------------------------------------------------------------------* //
@@ -81,8 +79,7 @@ __all__ = [
     "pcen",
     "griffinlim",
     "constant_q_lengths",
-    "cq_to_chroma",
-    "peak_pick"
+    "cq_to_chroma"
 ]
 
 
@@ -4315,155 +4312,3 @@ def cq_to_chroma(n_input, bins_per_octave=12, n_chroma=12,
 
     return cq_to_ch
 
-
-def peak_pick(x, pre_max, post_max, pre_avg, post_avg, delta, wait):
-    """Uses a flexible heuristic to pick peaks in a signal.
-    A sample n is selected as an peak if the corresponding x[n]
-    fulfills the following three conditions:
-    1. `x[n] == max(x[n - pre_max:n + post_max])`
-    2. `x[n] >= mean(x[n - pre_avg:n + post_avg]) + delta`
-    3. `n - previous_n > wait`
-    where `previous_n` is the last sample picked as a peak (greedily).
-    This implementation is based on [1]_ and [2]_.
-    .. [1] Boeck, Sebastian, Florian Krebs, and Markus Schedl.
-        "Evaluating the Online Capabilities of Onset Detection Methods." ISMIR.
-        2012.
-    .. [2] https://github.com/CPJKU/onset_detection/blob/master/onset_program.py
-    Parameters
-    ----------
-    x         : np.ndarray [shape=(n,)]
-        input signal to peak picks from
-    pre_max   : int >= 0 [scalar]
-        number of samples before `n` over which max is computed
-    post_max  : int >= 1 [scalar]
-        number of samples after `n` over which max is computed
-    pre_avg   : int >= 0 [scalar]
-        number of samples before `n` over which mean is computed
-    post_avg  : int >= 1 [scalar]
-        number of samples after `n` over which mean is computed
-    delta     : float >= 0 [scalar]
-        threshold offset for mean
-    wait      : int >= 0 [scalar]
-        number of samples to wait after picking a peak
-    Returns
-    -------
-    peaks     : np.ndarray [shape=(n_peaks,), dtype=int]
-        indices of peaks in `x`
-    Raises
-    ------
-    ParameterError
-        If any input lies outside its defined range
-    Examples
-    --------
-    # >>> y, sr = librosa.load(librosa.util.example_audio_file(), duration=15)
-    # >>> onset_env = librosa.onset.onset_strength(y=y, sr=sr,
-    # ...                                          hop_length=512,
-    # ...                                          aggregate=np.median)
-    # >>> peaks = librosa.util.peak_pick(onset_env, 3, 3, 3, 5, 0.5, 10)
-    # >>> peaks
-    # array([  4,  23,  73, 102, 142, 162, 182, 211, 261, 301, 320,
-    #        331, 348, 368, 382, 396, 411, 431, 446, 461, 476, 491,
-    #        510, 525, 536, 555, 570, 590, 609, 625, 639])
-    #
-    # >>> import matplotlib.pyplot as plt
-    # >>> times = librosa.frames_to_time(np.arange(len(onset_env)),
-    # ...                                sr=sr, hop_length=512)
-    # >>> plt.figure()
-    # >>> ax = plt.subplot(2, 1, 2)
-    # >>> D = librosa.stft(y)
-    # >>> librosa.display.specshow(librosa.amplitude_to_db(D, ref=np.max),
-    # ...                          y_axis='log', x_axis='time')
-    # >>> plt.subplot(2, 1, 1, sharex=ax)
-    # >>> plt.plot(times, onset_env, alpha=0.8, label='Onset strength')
-    # >>> plt.vlines(times[peaks], 0,
-    # ...            onset_env.max(), color='r', alpha=0.8,
-    # ...            label='Selected peaks')
-    # >>> plt.legend(frameon=True, framealpha=0.8)
-    # >>> plt.axis('tight')
-    # >>> plt.tight_layout()
-    """
-
-    if pre_max < 0:
-        raise ParameterError('pre_max must be non-negative')
-    if pre_avg < 0:
-        raise ParameterError('pre_avg must be non-negative')
-    if delta < 0:
-        raise ParameterError('delta must be non-negative')
-    if wait < 0:
-        raise ParameterError('wait must be non-negative')
-
-    if post_max <= 0:
-        raise ParameterError('post_max must be positive')
-
-    if post_avg <= 0:
-        raise ParameterError('post_avg must be positive')
-
-    if x.ndim != 1:
-        raise ParameterError('input array must be one-dimensional')
-
-    # Ensure valid index types
-    pre_max = valid_int(pre_max, cast=np.ceil)
-    post_max = valid_int(post_max, cast=np.ceil)
-    pre_avg = valid_int(pre_avg, cast=np.ceil)
-    post_avg = valid_int(post_avg, cast=np.ceil)
-    wait = valid_int(wait, cast=np.ceil)
-
-    # Get the maximum of the signal over a sliding window
-    max_length = pre_max + post_max
-    max_origin = np.ceil(0.5 * (pre_max - post_max))
-    # Using mode='constant' and cval=x.min() effectively truncates
-    # the sliding window at the boundaries
-    mov_max = scipy.ndimage.filters.maximum_filter1d(x, int(max_length),
-                                                     mode='constant',
-                                                     origin=int(max_origin),
-                                                     cval=x.min())
-
-    # Get the mean of the signal over a sliding window
-    avg_length = pre_avg + post_avg
-    avg_origin = np.ceil(0.5 * (pre_avg - post_avg))
-    # Here, there is no mode which results in the behavior we want,
-    # so we'll correct below.
-    mov_avg = scipy.ndimage.filters.uniform_filter1d(x, int(avg_length),
-                                                     mode='nearest',
-                                                     origin=int(avg_origin))
-
-    # Correct sliding average at the beginning
-    n = 0
-    # Only need to correct in the range where the window needs to be truncated
-    while n - pre_avg < 0 and n < x.shape[0]:
-        # This just explicitly does mean(x[n - pre_avg:n + post_avg])
-        # with truncation
-        start = n - pre_avg
-        start = start if start > 0 else 0
-        mov_avg[n] = np.mean(x[start:n + post_avg])
-        n += 1
-    # Correct sliding average at the end
-    n = x.shape[0] - post_avg
-    # When post_avg > x.shape[0] (weird case), reset to 0
-    n = n if n > 0 else 0
-    while n < x.shape[0]:
-        start = n - pre_avg
-        start = start if start > 0 else 0
-        mov_avg[n] = np.mean(x[start:n + post_avg])
-        n += 1
-
-    # First mask out all entries not equal to the local max
-    detections = x * (x == mov_max)
-
-    # Then mask out all entries less than the thresholded average
-    detections = detections * (detections >= (mov_avg + delta))
-
-    # Initialize peaks array, to be filled greedily
-    peaks = []
-
-    # Remove onsets which are close together in time
-    last_onset = -np.inf
-
-    for i in np.nonzero(detections)[0]:
-        # Only report an onset if the "wait" samples was reported
-        if i > last_onset + wait:
-            peaks.append(i)
-            # Save last reported onset
-            last_onset = i
-
-    return np.array(peaks)
