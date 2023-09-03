@@ -125,9 +125,7 @@ def pv1(D, rate, hop_length=None):
         d_stretch[:, t] = mag * np.exp(1.j * phase_acc)
 
         # Compute phase advance
-        dphase = (np.angle(columns[:, 1])
-                  - np.angle(columns[:, 0])
-                  - phi_advance)
+        dphase = (np.angle(columns[:, 1]) - np.angle(columns[:, 0]) - phi_advance)
 
         # Wrap to -pi:pi range
         dphase = dphase - 2.0 * np.pi * np.round(dphase / (2.0 * np.pi))
